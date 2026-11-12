@@ -74,7 +74,7 @@ export function Sheet({
             <X size={17} />
           </button>
         </div>
-        <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-[max(env(safe-area-inset-bottom),20px)] pt-1">{children}</div>
+        <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-[max(env(safe-area-inset-bottom),28px)] pt-1">{children}</div>
         {footer && <div className="border-t border-white/8 bg-black/40 px-5 py-3 backdrop-blur-xl">{footer}</div>}
       </div>
     </div>,
