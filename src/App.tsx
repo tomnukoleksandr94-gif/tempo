@@ -201,6 +201,15 @@ export default function App() {
   const events = useStore((s) => s.events)
   const eventReminders = useStore((s) => s.settings.eventReminders !== false)
   useEffect(() => { warmUpBillingServer() }, [])
+  // keep the free-tier server awake while the app is open (cheap ping every 4 min)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') warmUpBillingServer()
+    }, 4 * 60 * 1000)
+    const onVis = () => { if (document.visibilityState === 'visible') warmUpBillingServer() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [])
   // push upcoming events to the server for Telegram reminders (debounced)
   useEffect(() => {
     const id = setTimeout(() => {

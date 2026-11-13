@@ -84,7 +84,7 @@ function AccountLogin({ onAccount }: { onAccount: (a: AccountInfo) => void }) {
   )
 }
 
-function AdminPanel() {
+function AdminPanel({ onExpired }: { onExpired: () => void }) {
   const t2 = useT()
   const toast = useToast()
   const [data, setData] = useState<AdminOverview | null>(null)
@@ -97,7 +97,10 @@ function AdminPanel() {
     setBusy(true)
     const res = await adminOverview()
     setBusy(false)
-    if (res.error) {
+    if (res.error === 'unauthorized') {
+      onExpired()
+      toast(t2('acc.expired'), 'info')
+    } else if (res.error) {
       toast(t2('acc.serverOff'), 'err')
     } else if (res.data) {
       setData(res.data)
@@ -242,10 +245,13 @@ export function AccountSection() {
     return <AccountLogin onAccount={setAccount} />
   }
 
+  const handleExpired = () => { logout(); setAccount(null) }
+
   const doUpload = async () => {
     setSyncBusy(true)
     const res = await uploadData(exportJson())
     setSyncBusy(false)
+    if (res.error === 'unauthorized') { handleExpired(); toast(t2('acc.expired'), 'info'); return }
     toast(res.ok ? t2('acc.uploadOk') : t2('acc.serverOff'), res.ok ? 'ok' : 'err')
   }
 
@@ -253,6 +259,7 @@ export function AccountSection() {
     setSyncBusy(true)
     const res = await downloadData()
     setSyncBusy(false)
+    if (res.error === 'unauthorized') { handleExpired(); toast(t2('acc.expired'), 'info'); return }
     if (res.error) {
       toast(t2('acc.serverOff'), 'err')
       return
@@ -291,7 +298,7 @@ export function AccountSection() {
         </div>
       </div>
 
-      {account.role === 'admin' && <AdminPanel />}
+      {account.role === 'admin' && <AdminPanel onExpired={handleExpired} />}
     </div>
   )
 }

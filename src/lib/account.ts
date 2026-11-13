@@ -46,22 +46,30 @@ function clear() {
   } catch { /* ignore */ }
 }
 
-async function api(path: string, body: object, timeoutMs = 8000): Promise<any> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    const res = await fetch(`${BILLING_API}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: ctrl.signal
-    })
-    if (!res.ok) return { error: `HTTP ${res.status}` }
-    return await res.json()
-  } catch {
-    return { error: 'network' }
-  } finally {
-    clearTimeout(timer)
+async function api(path: string, body: object, timeoutMs = 8000, retries = 1): Promise<any> {
+  for (let attempt = 0; ; attempt++) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    try {
+      const res = await fetch(`${BILLING_API}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      })
+      if (!res.ok) return { error: res.status === 401 ? 'unauthorized' : `HTTP ${res.status}` }
+      return await res.json()
+    } catch (e: any) {
+      const err = { error: e?.name === 'AbortError' ? 'timeout' : 'network' }
+      // cold-start retry: the free-tier server can take a moment to wake up
+      if (attempt < retries && (err.error === 'timeout' || err.error === 'network')) {
+        await new Promise((r) => setTimeout(r, 1200))
+        continue
+      }
+      return err
+    } finally {
+      clearTimeout(timer)
+    }
   }
 }
 
@@ -99,14 +107,9 @@ export async function uploadData(data: string): Promise<{ ok: boolean; error?: s
 export async function downloadData(): Promise<{ data: string | null; error?: string }> {
   const token = getToken()
   if (!token) return { data: null, error: 'no account' }
-  try {
-    const res = await fetch(`${BILLING_API}/account/data`, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) return { data: null, error: `HTTP ${res.status}` }
-    const json = await res.json()
-    return { data: json.data }
-  } catch {
-    return { data: null, error: 'network' }
-  }
+  // POST variant (same handler) so the shared api() gives us timeout + retry + 401 mapping
+  const res = await api('/account/data', { token, download: true })
+  return res.error ? { data: null, error: res.error } : { data: res.data ?? null }
 }
 
 // ---------- admin API (owner only, verified server-side) ----------

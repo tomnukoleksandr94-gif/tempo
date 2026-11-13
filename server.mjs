@@ -541,6 +541,7 @@ const server = http.createServer(async (req, res) => {
     if (!r) return json(res, 401, { error: 'unauthorized' })
     const acc = r.acc || (body.token && sessionAccount(body.token))
     if (!acc) return json(res, 400, { error: 'no account' })
+    if (body.download) return json(res, 200, { data: acc.appData || null, ts: acc.appDataTs || null })
     acc.appData = typeof body.data === 'string' ? body.data.slice(0, 2_000_000) : null
     acc.appDataTs = Date.now()
     save()
