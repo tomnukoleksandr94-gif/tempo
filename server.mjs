@@ -31,7 +31,9 @@ const BOT_TOKEN = process.env.BOT_TOKEN || ''
 const TG_PROXY_URL = (process.env.CUSTOM_CRED_API_TELEGRAM_ORG_URL || '').replace(/\/$/, '')
 const TG_PROXY_KEY = process.env.CUSTOM_CRED_API_TELEGRAM_ORG_PROXY_AUTH_KEY || ''
 const TG_CRED = TG_PROXY_URL && TG_PROXY_KEY
-const TG_TOKEN_AVAIL = BOT_TOKEN || TG_CRED
+// Mutable: set to false by the startup probe if the Telegram API is not
+// actually reachable (e.g. a proxy that cannot carry path-based bot auth).
+let TG_TOKEN_AVAIL = !!(BOT_TOKEN || TG_CRED)
 const PORT = Number(process.env.PORT || 3000)
 // Shared secret for the Telegram webhook (set via setWebhook secret_token).
 // When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
@@ -1084,3 +1086,23 @@ if (!TG_TOKEN_AVAIL) {
 server.listen(PORT, () => console.log(`[tempo] billing server on :${PORT}`))
 
 setBotCommands()
+
+// Startup probe: verify the Telegram API actually answers with our auth.
+// A credential proxy that cannot carry Telegram's path-based bot auth would
+// otherwise leave Stars billing silently broken (health would lie).
+;(async () => {
+  if (!TG_TOKEN_AVAIL) return
+  try {
+    const r = await tgFetch('getMe', { method: 'POST' })
+    const j = await r?.json().catch(() => null)
+    if (j?.ok) {
+      console.log('[tempo] Telegram API OK — bot @' + (j.result?.username || '?'))
+    } else {
+      TG_TOKEN_AVAIL = false
+      console.warn('[tempo] Telegram API probe failed (' + (j?.description || r?.status || 'no response') + ') — Stars billing and initData login disabled. Set BOT_TOKEN env with the raw token to enable Telegram features.')
+    }
+  } catch (e) {
+    TG_TOKEN_AVAIL = false
+    console.warn('[tempo] Telegram API probe error:', e?.message, '— Telegram features disabled')
+  }
+})()
