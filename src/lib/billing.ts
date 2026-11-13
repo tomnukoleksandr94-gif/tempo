@@ -36,10 +36,31 @@ export const PLANS: Record<Plan, PlanDef> = {
 
 export const PLAN_ORDER: Plan[] = ['free', 'plus', 'pro']
 
-/** Display price of a plan for a period. */
+// ---------- launch promotion (mirror of the server config) ----------
+// TEMPO3: −€3 off the FIRST payment, until 2026-12-05 23:59:59 Europe/Paris.
+// The server is the authority (it also knows whether the user already used it);
+// this mirror is used for display when the server is unreachable.
+export const PROMO = {
+  code: 'TEMPO3',
+  discount: 3,
+  endsAt: '2026-12-05T23:59:59+01:00',
+  prices: {
+    plus: { monthly: 1.99, annual: 46.9 },
+    pro: { monthly: 5.99, annual: 86.9 }
+  }
+}
+export const promoActive = () => Date.now() < Date.parse(PROMO.endsAt)
+
+/** Display price of a plan for a period (normal, without promo). */
 export function planPrice(plan: Plan, period: BillingPeriod): number {
   if (plan === 'free') return 0
   return period === 'monthly' ? PLANS[plan].monthly : PLANS[plan].annual
+}
+
+/** First-payment price (promo-aware when the server hasn't said otherwise). */
+export function firstPrice(plan: Exclude<Plan, 'free'>, period: BillingPeriod, promoAvailable: boolean): number {
+  const base = planPrice(plan, period)
+  return promoAvailable && promoActive() ? Math.round((base - PROMO.discount) * 100) / 100 : base
 }
 
 /** Daily AI action limit for the active plan. */
@@ -147,6 +168,21 @@ export interface ServerUserState {
   referralCode?: string
   billingAvailable: boolean
   cardPayments?: 'auto' | 'manual'
+  /** launch promo (server-authoritative: includes promoUsed) */
+  promo?: { active: boolean; code: string; discount: number; endsAt: string; prices: Record<string, Record<string, number>> | null }
+  /** server-side daily AI usage */
+  usage?: { date: string; count: number; limit: number }
+  /** model tiers allowed for this plan */
+  tiers?: string[]
+}
+
+/** Ask the server for the authoritative AI usage counter. */
+export async function fetchAiUsage(): Promise<{ date: string; count: number; limit: number } | { error: string }> {
+  const initData = (globalThis as any)?.Telegram?.WebViewApp?.initData || ''
+  let token: string | null = null
+  try { token = localStorage.getItem('tempo-account-token') } catch { /* ignore */ }
+  const tzMinutes = -new Date().getTimezoneOffset()
+  return apiWithRetry('/ai/usage', { initData, token, tzMinutes })
 }
 
 /** Ask the server for the authoritative subscription state. */

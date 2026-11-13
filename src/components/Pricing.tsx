@@ -5,7 +5,7 @@ import { useT } from '../lib/hooks'
 import { useToast } from './ui'
 import { tg, haptic } from '../lib/telegram'
 import {
-  PLANS, PLAN_ORDER, planPrice,
+  PLANS, PLAN_ORDER, planPrice, firstPrice, PROMO, promoActive,
   effectivePlan, fetchUserState, createStarsInvoice, createCardLink, cancelSubscription
 } from '../lib/billing'
 import type { BillingPeriod, Plan } from '../lib/types'
@@ -30,6 +30,10 @@ export function PricingSheet({ onClose, go }: { onClose?: () => void; go?: (tab:
   const [method, setMethod] = useState<'stars' | 'card'>('stars')
   const [cardMode, setCardMode] = useState<'auto' | 'manual' | null>(null)
   const [needLogin, setNeedLogin] = useState(false)
+  // promo: server-authoritative (knows if the user already used it);
+  // local mirror as the display fallback when the server is unreachable
+  const [promoForUser, setPromoForUser] = useState<boolean | null>(null)
+  const promoApplies = promoForUser === null ? promoActive() : promoForUser
   // auto card payment: poll status when the user returns from the checkout
   useEffect(() => {
     function onFocus() { refreshState() }
@@ -73,6 +77,7 @@ export function PricingSheet({ onClose, go }: { onClose?: () => void; go?: (tab:
       }
       setServerOk(true)
       if (res.cardPayments) setCardMode(res.cardPayments)
+      if (res.promo) setPromoForUser(!!res.promo.active)
       if (res.referralCode) {
         try { localStorage.setItem('tempo-referral-code', res.referralCode) } catch { /* ignore */ }
       }
@@ -153,6 +158,17 @@ export function PricingSheet({ onClose, go }: { onClose?: () => void; go?: (tab:
         ))}
       </div>
 
+      {/* launch promo banner (real dates, auto-expires) */}
+      {promoActive() && (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-(--color-acc)/40 bg-acc/10 px-3.5 py-2.5">
+          <span className="text-[16px]">🎁</span>
+          <div className="text-[12px] leading-snug text-t2">
+            <span className="font-bold text-t1">{PROMO.code}</span> — {t2('plan.promoText').replace('{n}', String(PROMO.discount))}{' '}
+            <span className="text-t3">{t2('plan.promoUntil')} 05.12.2026</span>
+          </div>
+        </div>
+      )}
+
       {/* payment method toggle (card shown only when LiqPay checkout is configured) */}
       {cardMode === 'auto' && (
         <div className="glass-sm flex items-center gap-1 p-1">
@@ -200,9 +216,21 @@ export function PricingSheet({ onClose, go }: { onClose?: () => void; go?: (tab:
             </div>
 
             <div className="mb-2.5 flex items-baseline gap-1.5">
-              <span className="tabular text-[22px] font-extrabold">
-                {p === 'free' ? '€0' : `€${price.toFixed(2)}`}
-              </span>
+              {p !== 'free' && promoApplies && price > firstPrice(p, period, promoApplies) ? (
+                <>
+                  <span className="tabular text-[22px] font-extrabold text-acc">
+                    €{firstPrice(p, period, promoApplies).toFixed(2)}
+                  </span>
+                  <span className="tabular text-[13px] text-t3 line-through">€{price.toFixed(2)}</span>
+                  <span className="text-[11px] font-semibold text-t3">{t2('plan.firstPayment')}</span>
+                </>
+              ) : (
+                <>
+                  <span className="tabular text-[22px] font-extrabold">
+                    {p === 'free' ? '€0' : `€${price.toFixed(2)}`}
+                  </span>
+                </>
+              )}
               <span className="text-[12px] text-t3">
                 {t2(period === 'monthly' ? 'plan.perMonth' : 'plan.perYear')}
               </span>
@@ -231,7 +259,13 @@ export function PricingSheet({ onClose, go }: { onClose?: () => void; go?: (tab:
                   ? t2('plan.current')
                   : method === 'card'
                     ? t2(cardMode === 'auto' ? 'plan.payCardAuto' : 'plan.payCardBtn')
-                    : `${t2('plan.starsPay')} · ${period === 'monthly' ? def.starsMonthly : def.starsAnnual} ⭐`}
+                    : (() => {
+                        const base = period === 'monthly' ? def.starsMonthly : def.starsAnnual
+                        const stars = promoApplies
+                          ? Math.max(1, base - Math.round(PROMO.discount * base / price))
+                          : base
+                        return `${t2('plan.starsPay')} · ${stars} ⭐${promoApplies ? ` (−${base - stars} ⭐)` : ''}`
+                      })()}
               </Btn>
             )}
           </div>

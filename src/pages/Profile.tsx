@@ -9,8 +9,9 @@ import { effectivePlan, aiLimitFor } from '../lib/billing'
 import { PricingSheet } from '../components/Pricing'
 import { ReferralBlock } from '../components/Referral'
 import { AccountSection } from '../components/Account'
+import { LegalSection } from '../components/Legal'
 import { useT } from '../lib/hooks'
-import { MODELS } from '../lib/ai'
+
 import { t } from '../lib/i18n'
 import { download } from '../lib/utils'
 import type { Currency } from '../lib/types'
@@ -139,11 +140,18 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
       <SectionHeader title={t2('pr.aiSettings')} />
       <Group icon={<Sparkles size={15} className="text-acc" />} title={t2('pr.aiSettings')}>
         <Row label={t2('pr.model')}>
-          <select className="inp h-9 w-[190px] !rounded-full" value={settings.model} onChange={(e) => setSettings({ model: e.target.value })}>
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
+          <select
+            className="inp h-9 w-[190px] !rounded-full"
+            value={settings.aiTier || 'fast'}
+            onChange={(e) => setSettings({ aiTier: e.target.value as 'fast' | 'balanced' | 'advanced' })}
+          >
+            <option value="fast">{t2('ai.tier_fast')} — Gemini 3.5 Flash Lite</option>
+            <option value="balanced">{t2('ai.tier_balanced')} — Gemini 3.5 Flash</option>
+            <option value="advanced">{t2('ai.tier_advanced')} — Gemini 3.5 Flash · Deep</option>
           </select>
+        </Row>
+        <Row label={t2('pr.aiPersonalization')}>
+          <span className="text-[12px] text-t3">{t2('pr.aiPersonalizationHint')}</span>
         </Row>
         <Row label={t2('pr.apiKey')}>
           <input
@@ -224,6 +232,10 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
 
       <div className="mt-4">
         <ReferralBlock />
+      </div>
+
+      <div className="mt-3">
+        <LegalSection />
       </div>
 
       <SectionHeader title={t2('pr.data')} />

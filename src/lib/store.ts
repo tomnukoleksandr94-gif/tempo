@@ -35,6 +35,8 @@ const initialSettings: Settings = {
   locale: detectLocale(),
   currency: 'EUR',
   model: 'gemini-3.5-flash-lite',
+  aiTier: 'fast',
+  aiPrefs: { depth: 'balanced', length: 'normal', style: 'friendly', behavior: 'simple' },
   apiKey: '',
   kcalTarget: 2200,
   widgets: DEFAULT_WIDGETS,
@@ -487,6 +489,12 @@ export const useStore = create<Store>()(
           persisted.state.subscription = freeSubscription()
         }
         persisted.state.settings = { ...initialSettings, ...(persisted.state.settings || {}) }
+        // migrate the legacy model id to the new tier selector
+        const s = persisted.state.settings
+        if (!s.aiTier) {
+          s.aiTier = s.model === 'gemini-3.8-flash' || s.model === 'gemini-3.5-flash' ? 'advanced' : 'fast'
+        }
+        if (!s.aiPrefs) s.aiPrefs = { depth: 'balanced', length: 'normal', style: 'friendly', behavior: 'simple' }
         // follow the system language until the user picks one explicitly
         if (!persisted.state.settings.localeChosen) {
           persisted.state.settings.locale = detectLocale()

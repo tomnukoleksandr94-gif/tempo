@@ -18,6 +18,7 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import { generate, generateStream, systemPrompt, extractJson, MODEL_REGISTRY, TIERS, PLAN_TIERS } from './ai-router.mjs'
 
 const BOT_TOKEN = process.env.BOT_TOKEN || ''
 const PORT = Number(process.env.PORT || 3000)
@@ -66,6 +67,82 @@ const STARS = {
   pro: { monthly: 450, annual: 4500 }
 }
 const EUR = { plus: { monthly: 4.99, annual: 49.9 }, pro: { monthly: 8.99, annual: 89.9 } }
+
+// ---------- launch promotion (TEMPO3): −€3 off the FIRST payment ----------
+// Valid until 2026-12-05 23:59:59 Europe/Paris. Applied automatically, once
+// per user (first successful payment only); renewals return to full price.
+const PROMO = {
+  code: 'TEMPO3',
+  discount: 3,
+  endsAt: '2026-12-05T23:59:59+01:00'
+}
+const promoActive = () => Date.now() < Date.parse(PROMO.endsAt)
+const round2 = (n) => Math.round(n * 100) / 100
+/** Price of the FIRST payment (promo-aware). user = db.users record or null. */
+function firstPrice(plan, period, user) {
+  const base = EUR[plan][period]
+  if (promoActive() && !(user && user.promoUsed)) return round2(base - PROMO.discount)
+  return base
+}
+/** Stars (XTR) amount of the first payment, proportionally discounted. */
+function firstStars(plan, period, user) {
+  const base = STARS[plan][period]
+  const eur = EUR[plan][period]
+  if (promoActive() && !(user && user.promoUsed)) return Math.max(1, base - Math.round(PROMO.discount * base / eur))
+  return base
+}
+function promoState(user) {
+  return {
+    active: promoActive() && !(user && user.promoUsed),
+    code: PROMO.code,
+    discount: PROMO.discount,
+    endsAt: PROMO.endsAt,
+    // discounted first-payment prices (only when the promo applies to this user)
+    prices: promoActive()
+      ? {
+          plus: { monthly: round2(EUR.plus.monthly - PROMO.discount), annual: round2(EUR.plus.annual - PROMO.discount) },
+          pro: { monthly: round2(EUR.pro.monthly - PROMO.discount), annual: round2(EUR.pro.annual - PROMO.discount) }
+        }
+      : null
+  }
+}
+
+// ---------- server-side AI usage limits (per plan, per user timezone) ----------
+const AI_LIMITS = { free: 10, plus: 100, pro: 300 }
+const ANON_AI_LIMIT = 10 // per IP per day, for visitors without an account/Telegram
+function planOf(u) {
+  return u && u.status === 'active' && u.expiresAt && u.expiresAt > new Date().toISOString() ? u.plan : 'free'
+}
+function aiLimitOf(u) {
+  return AI_LIMITS[planOf(u)] ?? AI_LIMITS.free
+}
+/** Local calendar day key for a user, given their tz offset in minutes. */
+function dayKey(tzMinutes) {
+  const off = typeof tzMinutes === 'number' && Math.abs(tzMinutes) <= 840 ? tzMinutes : 0
+  return new Date(Date.now() + off * 60000).toISOString().slice(0, 10)
+}
+const anonUsage = new Map() // ip -> {date, count}
+function bumpUsage(u, ip, tzMinutes) {
+  const date = dayKey(tzMinutes)
+  if (u) {
+    if (!u.aiUsage || u.aiUsage.date !== date) u.aiUsage = { date, count: 0 }
+    return { date, count: ++u.aiUsage.count, limit: aiLimitOf(u) }
+  }
+  const cur = anonUsage.get(ip) || { date, count: 0 }
+  if (cur.date !== date) { cur.date = date; cur.count = 0 }
+  cur.count += 1
+  anonUsage.set(ip, cur)
+  return { date, count: cur.count, limit: ANON_AI_LIMIT }
+}
+function usageOf(u, ip, tzMinutes) {
+  const date = dayKey(tzMinutes)
+  if (u) {
+    const c = u.aiUsage && u.aiUsage.date === date ? u.aiUsage.count : 0
+    return { date, count: c, limit: aiLimitOf(u) }
+  }
+  const cur = anonUsage.get(ip)
+  return { date, count: cur && cur.date === date ? cur.count : 0, limit: ANON_AI_LIMIT }
+}
 
 // ---------- storage ----------
 let db = { users: {}, accounts: {}, sessions: {} }
@@ -346,6 +423,8 @@ const server = http.createServer(async (req, res) => {
         activate(String(payload.userId), payload.plan, payload.period, {
           chargeId, ts: Date.now(), stars: sp.total_amount
         })
+        // the launch discount (TEMPO3) applies to the first payment only
+        if (payload.promo) { u.promoUsed = true; save() }
         return json(res, 200, { ok: true })
       }
     }
@@ -418,10 +497,11 @@ const server = http.createServer(async (req, res) => {
       if (cmd === '/plans') {
         const msg =
           'Тарифы Tempo:\n\n' +
-          'Free — базовый функционал: 5 AI-сообщений в день\n' +
-          'Plus (€4.99/мес или 250 ⭐) — безлимит AI, все разделы\n' +
-          'Pro (€8.99/мес или 450 ⭐) — приоритетная поддержка + ранняя доступность новых функций\n\n' +
-          'Оплата картой и Telegram Stars — внутри приложения.'
+          'Free — базовый функционал: 10 AI-запросов в день\n' +
+          'Plus (€4.99/мес или €49.90/год; 100 AI-запросов в день) — фото-анализ еды, расширенная статистика\n' +
+          'Pro (€8.99/мес или €89.90/год; 300 AI-запросов в день) — умные модели, приоритет, все функции\n' +
+          (promoActive() ? '\n🎁 Скидка TEMPO3: −€3 на первый платёж до 5 декабря 2026 — применяется автоматически при оплате.' : '') +
+          '\nОплата картой и Telegram Stars — внутри приложения.'
         if (APP_URL.startsWith('https')) {
           fetch(TG_API('sendPhoto'), {
             method: 'POST',
@@ -559,12 +639,154 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { data: acc.appData || null, ts: acc.appDataTs || null })
   }
 
+  // --- AI endpoints (server-side key, plan gating, daily limits) ---
+  // The Gemini API key never leaves the server. Anonymous web visitors get a
+  // small per-IP daily allowance; identified users are limited by their plan.
+  if (req.url === '/api/ai/models' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    const plan = r ? planOf(r.u) : 'free'
+    return json(res, 200, {
+      models: MODEL_REGISTRY.map((m) => ({ ...m })),
+      tiers: Object.entries(TIERS).map(([id, t]) => ({
+        id,
+        label: t.label,
+        model: t.model,
+        allowed: PLAN_TIERS[plan].includes(id)
+      })),
+      plan
+    })
+  }
+
+  if (req.url === '/api/ai/usage' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    const ip = req.socket.remoteAddress || 'x'
+    const usage = usageOf(r ? r.u : null, ip, body.tzMinutes)
+    return json(res, 200, { ...usage, plan: r ? planOf(r.u) : 'free' })
+  }
+
+  if (req.url === '/api/ai/chat' && req.method === 'POST') {
+    const body = await readBody(req)
+    const ip = req.socket.remoteAddress || 'x'
+    const r = resolveUser(body)
+    const u = r ? r.u : null
+    const plan = r ? planOf(u) : 'free'
+
+    // daily limit (server-side authority, reset by the user's timezone)
+    const usage = usageOf(u, ip, body.tzMinutes)
+    if (usage.count >= usage.limit) {
+      return json(res, 429, { error: 'limit', usage, message: 'Daily AI request limit reached for your plan.' })
+    }
+
+    const mode = ['chat', 'action', 'insight', 'finance'].includes(body.mode) ? body.mode : 'chat'
+    const text = String(body.text || '').slice(0, 4000)
+    if (!text && !body.image) return json(res, 400, { error: 'empty' })
+
+    // plan gating: photo analysis (vision) is a Plus/Pro feature
+    if (body.image && plan === 'free') {
+      return json(res, 403, { error: 'plan_required', message: 'AI food/photo analysis is available on Plus and Pro.' })
+    }
+
+    // tier gating with honest downgrade notice
+    const requestedTier = TIERS[body.tier] ? body.tier : 'fast'
+    let tier = requestedTier
+    let downgraded = false
+    if (!PLAN_TIERS[plan].includes(tier)) {
+      // highest tier allowed by the plan
+      tier = PLAN_TIERS[plan][PLAN_TIERS[plan].length - 1]
+      downgraded = true
+    }
+
+    const history = Array.isArray(body.history)
+      ? body.history.slice(-8).map((m) => ({ role: m.role === 'user' ? 'user' : 'model', text: String(m.text || '').slice(0, 2000) })).filter((m) => m.text)
+      : []
+
+    const parts = []
+    if (body.image && typeof body.image.b64 === 'string' && /^image\/(jpeg|png|webp|heic)$/.test(String(body.image.mime))) {
+      parts.push({ inlineData: { mimeType: body.image.mime, data: body.image.b64.slice(0, 8_000_000) } })
+    }
+    for (const m of history) parts.push({ text: m.text })
+    parts.push({ text: text || 'Analyze this food photo.' })
+
+    const system = systemPrompt(mode, body.context, body.prefs, body.locale)
+    const opts = { parts, system, tier, prefs: body.prefs, jsonMode: mode === 'action' }
+
+    // charge the request against the daily limit BEFORE calling the model
+    const charged = bumpUsage(u, ip, body.tzMinutes)
+    if (u) save()
+
+    const sseHeaders = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no'
+    }
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
+
+    try {
+      if (body.stream && mode === 'chat') {
+        res.writeHead(200, sseHeaders)
+        send({ type: 'meta', tier, requestedTier, downgraded, model: TIERS[tier].model, usage: charged })
+        const result = await generateStream(opts, (chunk) => send({ type: 'delta', text: chunk }))
+        send({ type: 'done', model: result.model, fellBack: result.fellBack, usage: charged })
+        res.end()
+      } else {
+        const result = await generate(opts)
+        let parsed = null
+        if (mode === 'action') {
+          try {
+            parsed = extractJson(result.text)
+          } catch {
+            return json(res, 502, { error: 'parse', message: 'Unparseable AI response.' })
+          }
+        }
+        return json(res, 200, {
+          text: mode === 'action' ? undefined : result.text,
+          reply: parsed?.reply ?? '',
+          clarify: typeof parsed?.clarify === 'string' && parsed.clarify.trim() ? parsed.clarify : null,
+          actions: Array.isArray(parsed?.actions) ? parsed.actions : [],
+          model: result.model,
+          fellBack: result.fellBack,
+          downgraded,
+          tier,
+          usage: charged
+        })
+      }
+    } catch (e) {
+      const code = e?.code || 'network'
+      const message =
+        code === 'auth' ? 'AI provider rejected the server key.' :
+        code === 'quota' ? 'AI provider quota exhausted — try again later.' :
+        code === 'timeout' ? 'AI model timed out.' :
+        code === 'busy' ? 'AI model busy — try again in a moment.' :
+        'AI request failed.'
+      if (res.headersSent) {
+        send({ type: 'error', code, message })
+        res.end()
+      } else {
+        return json(res, code === 'auth' ? 502 : 503, { error: code, message })
+      }
+    }
+    return
+  }
+
   // --- billing endpoints (verified initData or account session) ---
   if (req.url === '/api/billing/status' && req.method === 'POST') {
     const body = await readBody(req)
     const r = resolveUser(body)
     if (!r) return json(res, 401, { error: 'unauthorized' })
-    return json(res, 200, { ...publicState(r.u), billingAvailable: true, cardPayments: liqpayEnabled() ? 'auto' : 'manual', role: r.acc ? r.acc.role : 'user', username: r.acc ? r.acc.username : null })
+    return json(res, 200, {
+      ...publicState(r.u),
+      billingAvailable: true,
+      cardPayments: liqpayEnabled() ? 'auto' : 'manual',
+      role: r.acc ? r.acc.role : 'user',
+      username: r.acc ? r.acc.username : null,
+      promo: promoState(r.u),
+      usage: usageOf(r.u, req.socket.remoteAddress || 'x', body.tzMinutes),
+      tiers: PLAN_TIERS[planOf(r.u)]
+    })
   }
 
   if (req.url === '/api/billing/stars-invoice' && req.method === 'POST') {
@@ -574,21 +796,26 @@ const server = http.createServer(async (req, res) => {
     const userId = r.acc ? r.acc.userId : String(r.u === null ? '' : (r.u.id || ''))
     if (!STARS[body.plan]) return json(res, 400, { error: 'bad plan' })
     const period = body.period === 'annual' ? 'annual' : 'monthly'
-    const stars = STARS[body.plan][period]
-    const payload = JSON.stringify({ userId, plan: body.plan, period })
+    // promo: discounted amount for the FIRST payment only
+    const promo = promoActive() && !r.u.promoUsed
+    const stars = firstStars(body.plan, period, r.u)
+    const eur = firstPrice(body.plan, period, r.u)
+    const payload = JSON.stringify({ userId, plan: body.plan, period, promo: promo ? 1 : 0 })
     const inv = await fetch(TG_API('createInvoiceLink'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: `Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'} (${period === 'annual' ? 'год' : 'месяц'})`,
-        description: `Подписка Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'}, ${period === 'annual' ? 'годовая' : 'месяцная'}. ≈€${EUR[body.plan][period]}`,
+        description: promo
+          ? `Подписка Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'}, ${period === 'annual' ? 'годовая' : 'месяцная'}. Первый платёж со скидкой TEMPO3: €${eur.toFixed(2)} (далее €${EUR[body.plan][period].toFixed(2)})`
+          : `Подписка Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'}, ${period === 'annual' ? 'годовая' : 'месяцная'}. €${eur.toFixed(2)}`,
         payload,
         currency: 'XTR',
-        prices: [{ label: period === 'annual' ? 'Год' : 'Месяц', amount: stars }]
+        prices: [{ label: (promo ? 'Первый платёж (TEMPO3) — ' : '') + (period === 'annual' ? 'Год' : 'Месяц'), amount: stars }]
       })
     }).then((x) => x.json())
     if (!inv.ok) return json(res, 502, { error: 'invoice failed' })
-    return json(res, 200, { link: inv.result })
+    return json(res, 200, { link: inv.result, stars, promo, amountEur: eur })
   }
 
   // automatic card payment: LiqPay checkout link (payer enters their card on
@@ -601,21 +828,29 @@ const server = http.createServer(async (req, res) => {
     if (!STARS[body.plan]) return json(res, 400, { error: 'bad plan' })
     const period = body.period === 'annual' ? 'annual' : 'monthly'
     const userId = r.acc ? r.acc.userId : String(r.u === null ? '' : (r.u.id || ''))
-    const amount = EUR[body.plan][period]
+    // promo: discounted FIRST payment only, then the normal price
+    const promo = promoActive() && !r.u.promoUsed
+    const amount = firstPrice(body.plan, period, r.u)
     const orderId = `lp_${userId}_${body.plan}_${period}_${Date.now()}`
+    // remember the order so the callback can settle the promo flag
+    db.orders = db.orders || {}
+    db.orders[orderId] = { userId, plan: body.plan, period, promo: promo ? 1 : 0, amount, ts: Date.now() }
+    save()
     const data = Buffer.from(JSON.stringify({
       version: 3,
       public_key: LIQPAY_PUBLIC,
       action: 'pay',
       amount,
       currency: 'EUR',
-      description: `Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'} — ${period === 'annual' ? 'год' : 'месяц'}`,
+      description: promo
+        ? `Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'} — ${period === 'annual' ? 'год' : 'месяц'} (первый платёж, скидка TEMPO3)`
+        : `Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'} — ${period === 'annual' ? 'год' : 'месяц'}`,
       order_id: orderId,
       language: 'ru',
       server_url: APP_URL + '/port/3000/api/liqpay-callback',
       result_url: APP_URL
     })).toString('base64')
-    return json(res, 200, { url: LIQPAY_URL + '?data=' + encodeURIComponent(data) + '&signature=' + encodeURIComponent(liqpaySign(data)) })
+    return json(res, 200, { url: LIQPAY_URL + '?data=' + encodeURIComponent(data) + '&signature=' + encodeURIComponent(liqpaySign(data)), promo, amountEur: amount })
   }
 
   // LiqPay server-to-server callback: verify signature, auto-activate on success
@@ -635,7 +870,8 @@ const server = http.createServer(async (req, res) => {
       // idempotency: skip if this exact order was already processed
       const seen = u.history.some((h) => h.id === ev.order_id)
       if (!seen) {
-        u.payments[ev.order_id] = { plan: m[2], period: m[3], ts: Date.now() }
+        const order = (db.orders || {})[ev.order_id]
+        u.payments[ev.order_id] = { plan: m[2], period: m[3], ts: Date.now(), amount: order ? order.amount : undefined }
         u.history.unshift({ id: ev.order_id, plan: m[2], period: m[3], stars: 0, status: 'paid', ts: Date.now() })
         u.history = u.history.slice(0, 50)
         const now = new Date()
@@ -645,6 +881,8 @@ const server = http.createServer(async (req, res) => {
         u.plan = m[2]
         u.period = m[3]
         u.status = 'active'
+        // the launch discount applies to the first payment only
+        if (order && order.promo) u.promoUsed = true
         rewardInviter(u)
         save()
       }

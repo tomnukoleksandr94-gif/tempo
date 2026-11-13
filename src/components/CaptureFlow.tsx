@@ -38,20 +38,15 @@ export function CaptureFlow({
   const [reply, setReply] = useState('')
   const busyRef = useRef(false)
   const settings = useStore((s) => s.settings)
-  const bumpAiUsage = useStore((s) => s.bumpAiUsage)
   const applyActions = useStore((s) => s.applyActions)
 
   useEffect(() => {
     if (!request || busyRef.current) return
     busyRef.current = true
 
-    const usage = bumpAiUsage()
-    if (!usage.ok) {
-      toast(t('ai.limitReached', settings.locale), 'err')
-      onFinish({ ok: false, reply: '', applied: [], error: 'limit' })
-      busyRef.current = false
-      return
-    }
+    // NOTE: the daily limit is enforced SERVER-side (the server owns the API
+    // key and the usage counter). The local counter is only a display mirror
+    // updated from every server response.
 
     const data = {
       transactions: useStore.getState().transactions,
@@ -83,9 +78,14 @@ export function CaptureFlow({
       })
       .catch((e: any) => {
         const msg =
-          e?.code === 'auth' ? t('pr.apiKeyHint', settings.locale) : t('err.ai', settings.locale)
+          e?.code === 'limit' ? t('ai.limitReached', settings.locale) :
+          e?.code === 'plan' ? t('ai.planRequired', settings.locale) :
+          e?.code === 'auth' ? t('pr.apiKeyHint', settings.locale) :
+          e?.code === 'quota' ? t('ai.quota', settings.locale) :
+          e?.code === 'timeout' ? t('ai.timeout', settings.locale) :
+          t('err.ai', settings.locale)
         toast(msg, 'err')
-        onFinish({ ok: false, reply: '', applied: [], error: String(e?.message || e) })
+        onFinish({ ok: false, reply: '', applied: [], error: String(e?.code || e?.message || e) })
       })
       .finally(() => {
         busyRef.current = false

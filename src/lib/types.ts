@@ -81,12 +81,27 @@ export interface CustomFood {
   f: number
 }
 
+export interface AiPrefs {
+  depth: 'fast' | 'balanced' | 'deep'
+  length: 'short' | 'normal' | 'detailed'
+  style: 'friendly' | 'professional' | 'neutral' | 'direct'
+  behavior: 'simple' | 'detailed' | 'analytical' | 'step'
+  /** 0–1; applied only by providers/models that support it (Pro) */
+  temperature?: number
+}
+
 export interface Settings {
   name: string
   locale: 'ru' | 'uk' | 'en' | 'de' | 'fr'
   localeChosen?: boolean
   currency: Currency
+  /** legacy model id — superseded by aiTier, kept for migration */
   model: string
+  /** AI model tier: fast | balanced | advanced (server enforces plan gating) */
+  aiTier: 'fast' | 'balanced' | 'advanced'
+  /** AI response personalization (applied to every conversation) */
+  aiPrefs: AiPrefs
+  /** user's OWN Gemini key (optional; otherwise the server key is used) */
   apiKey: string
   kcalTarget: number
   widgets: string[]
@@ -135,6 +150,10 @@ export interface ChatMessage {
   ts: number
   /** ids of applied action records, for context */
   applied?: string[]
+  /** model that generated this reply (display) */
+  model?: string
+  /** marked when the message is an error explanation */
+  error?: boolean
 }
 
 export interface CaptureRecord {

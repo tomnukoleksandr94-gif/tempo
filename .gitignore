@@ -7,3 +7,4 @@ qa/*.jpg
 tsconfig.tsbuildinfo
 data.json
 data.backup.json
+qa/*.png
