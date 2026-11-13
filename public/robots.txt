@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /port/
+Sitemap: https://tempo-lifeos.pplx.app/sitemap.xml

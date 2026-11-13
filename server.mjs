@@ -170,6 +170,24 @@ function verifyInitData(initData) {
 }
 
 // ---------- subscription logic ----------
+// the inviter automatically gets +7 days of Plus when their invitee pays
+function rewardInviter(invitee) {
+  if (!invitee.referredBy || invitee.referralRewarded) return
+  invitee.referralRewarded = true
+  const inviter = db.users[invitee.referredBy]
+  if (!inviter) return
+  inviter.referrals.paying += 1
+  const now = new Date()
+  const base = inviter.expiresAt && inviter.expiresAt > now.toISOString() ? new Date(inviter.expiresAt) : now
+  inviter.expiresAt = new Date(base.getTime() + 7 * 86400000).toISOString()
+  if (inviter.status !== 'active') {
+    inviter.plan = 'plus'
+    inviter.status = 'active'
+  }
+  inviter.history.unshift({ id: 'ref_' + Date.now(), plan: inviter.plan, period: 'referral', stars: 0, status: 'paid', ts: Date.now() })
+  inviter.history = inviter.history.slice(0, 50)
+}
+
 function activate(userId, plan, period, payment) {
   const u = user(userId)
   const now = new Date()
@@ -186,11 +204,8 @@ function activate(userId, plan, period, payment) {
     u.history.unshift({ id: payment.chargeId, plan, period, stars: payment.stars, status: 'paid', ts: payment.ts })
     u.history = u.history.slice(0, 50)
   }
-  // referral credit: inviter gets +1 paying when the invitee pays first time
-  if (u.referredBy && u.history.length === 1) {
-    const inviter = user(u.referredBy)
-    inviter.referrals.paying += 1
-  }
+  // referral credit: inviter automatically gets +7 days of Plus
+  rewardInviter(u)
   save()
 }
 
@@ -258,7 +273,8 @@ function publicState(u) {
     expiresAt: u.expiresAt,
     autoRenew: u.autoRenew,
     history: u.history,
-    referrals: u.referrals
+    referrals: u.referrals,
+    referralCode: u.id
   }
 }
 
@@ -309,6 +325,13 @@ const server = http.createServer(async (req, res) => {
       return json(res, 403, { error: 'forbidden' })
     }
     const body = await readBody(req)
+    // remember the chat id so reminders can be sent as Telegram messages
+    const fromId = body?.message?.from?.id
+    const chatId = body?.message?.chat?.id
+    if (fromId && chatId && String(chatId).startsWith('-100') === false && body?.message?.chat?.type === 'private') {
+      const u = user(String(fromId))
+      if (u.chatId !== chatId) { u.chatId = chatId; save() }
+    }
     const sp = body?.message?.successful_payment
     if (sp) {
       // verify with Telegram that the invoice belongs to our bot
@@ -356,7 +379,7 @@ const server = http.createServer(async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              photo: APP_URL + '/img/start.jpg',
+              photo: APP_URL + '/img/bot-welcome.jpg',
               caption,
               reply_markup: kb
             })
@@ -436,7 +459,7 @@ const server = http.createServer(async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              photo: APP_URL + '/img/start.jpg',
+              photo: APP_URL + '/img/bot-welcome.jpg',
               caption: msg,
               reply_markup: kb
             })
@@ -457,6 +480,22 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true })
       }
     }
+    return json(res, 200, { ok: true })
+  }
+
+  // --- event reminders (delivered as Telegram messages) ---
+  if (req.url === '/api/reminders/sync' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    if (!r) return json(res, 401, { error: 'unauthorized' })
+    const events = Array.isArray(body.events) ? body.events.slice(0, 50).map((e) => ({
+      id: String(e.id || '').slice(0, 40),
+      title: String(e.title || '').slice(0, 120),
+      date: String(e.date || '').slice(0, 10),
+      time: String(e.time || '').slice(0, 5)
+    })) : []
+    r.u.reminders = events
+    save()
     return json(res, 200, { ok: true })
   }
 
@@ -605,6 +644,7 @@ const server = http.createServer(async (req, res) => {
         u.plan = m[2]
         u.period = m[3]
         u.status = 'active'
+        rewardInviter(u)
         save()
       }
     }
@@ -759,6 +799,7 @@ const server = http.createServer(async (req, res) => {
     target.status = 'active'
     target.expiresAt = new Date(base.getTime() + days * 86400000).toISOString()
     target.history.unshift({ id: 'grant_' + Date.now(), plan, period: body.period || 'monthly', stars: 0, status: 'paid', ts: Date.now(), note: 'granted by admin' })
+    rewardInviter(target)
     save()
     return json(res, 200, { ok: true })
   }

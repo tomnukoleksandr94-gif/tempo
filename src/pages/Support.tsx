@@ -13,7 +13,7 @@ import { Btn } from '../components/ui'
  * Support chat: users write to the owner (admin), the owner replies from the
  * same page (admin sees an inbox of threads). Messages live on the server.
  */
-export default function SupportPage() {
+export default function SupportPage({ go }: { go?: (tab: any) => void }) {
   const t2 = useT()
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [text, setText] = useState('')
@@ -22,6 +22,7 @@ export default function SupportPage() {
   // admin inbox
   const [threads, setThreads] = useState<{ userId: string; username: string | null; unread: number; last: SupportMessage | null }[]>([])
   const [openThread, setOpenThread] = useState<string | null>(null)
+  const [needLogin, setNeedLogin] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const initData = tg?.initData || ''
@@ -45,6 +46,10 @@ export default function SupportPage() {
     document.title = 'Tempo — Support'
     // detect role: admins get an inbox, regular users get their own thread
     async function init() {
+      // no credentials at all -> ask the visitor to log in first
+      let hasAccount = false
+      try { hasAccount = !!localStorage.getItem('tempo-account-token') } catch { /* ignore */ }
+      if (!initData && !hasAccount) { setNeedLogin(true); return }
       // admin inbox works only for admins; a non-admin gets an error -> user mode
       const res = await adminSupportList(initData)
       if (!('error' in res) && Array.isArray(res.threads)) {
@@ -96,8 +101,23 @@ export default function SupportPage() {
         </div>
       </div>
 
+      {/* login prompt for anonymous web visitors */}
+      {needLogin && (
+        <div className="glass-sm flex flex-col items-start gap-2.5 p-4">
+          <div className="flex items-start gap-2.5 text-[13px] leading-relaxed text-t2">
+            <Headset size={15} className="mt-0.5 shrink-0 text-acc" />
+            {t2('support.loginHint')}
+          </div>
+          {go && (
+            <Btn variant="primary" className="w-full" onClick={() => go('profile')}>
+              {t2('plan.loginBtn')}
+            </Btn>
+          )}
+        </div>
+      )}
+
       {/* admin inbox */}
-      {role === 'admin' && !openThread && (
+      {!needLogin && role === 'admin' && !openThread && (
         <div className="flex flex-col gap-2">
           {threads.length === 0 && <p className="px-1 text-[13px] text-t3">{t2('support.empty')}</p>}
           {threads.map((th) => (
@@ -121,7 +141,7 @@ export default function SupportPage() {
       )}
 
       {/* chat thread */}
-      {(role === 'user' || openThread) && (
+      {!needLogin && (role === 'user' || openThread) && (
         <div className="glass flex min-h-[240px] flex-1 flex-col p-3">
           <div className="flex-1 space-y-2 overflow-y-auto pb-2" style={{ maxHeight: '46vh' }}>
             {messages.length === 0 && (

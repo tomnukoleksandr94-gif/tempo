@@ -126,6 +126,14 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
             {settings.effects ? t2('pr.on') : t2('pr.off')}
           </button>
         </Row>
+        <Row label={t2('pr.reminders')}>
+          <button
+            onClick={() => setSettings({ eventReminders: !settings.eventReminders })}
+            className={`press rounded-full px-4 py-1 text-[12px] font-semibold ${settings.eventReminders !== false ? 'bg-acc/15 text-acc' : 'bg-soft text-t2'}`}
+          >
+            {settings.eventReminders !== false ? t2('pr.on') : t2('pr.off')}
+          </button>
+        </Row>
       </Group>
 
       <SectionHeader title={t2('pr.aiSettings')} />
@@ -279,7 +287,7 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
 
       {/* pricing */}
       <Sheet open={pricing} onClose={() => setPricing(false)} title={t2('pr.subscription')}>
-        <PricingSheet onClose={() => setPricing(false)} />
+        <PricingSheet go={go} onClose={() => setPricing(false)} />
       </Sheet>
 
       {/* clear data */}

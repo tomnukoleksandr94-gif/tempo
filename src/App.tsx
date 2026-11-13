@@ -1,7 +1,7 @@
 import { LOCALE_TAGS } from './lib/utils'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Home as HomeIcon, Sparkles, Wallet, CalendarRange, UserRound
+  Home as HomeIcon, Sparkles, Wallet, CalendarRange, CreditCard, UserRound
 } from 'lucide-react'
 import { ToastProvider, useToast } from './components/ui'
 import { useStore, eventOccursOn } from './lib/store'
@@ -23,6 +23,7 @@ const TABS: { id: TabId; icon: ReactNode; key: string }[] = [
   { id: 'ai', icon: <Sparkles size={21} />, key: 'nav.ai' },
   { id: 'finance', icon: <Wallet size={21} />, key: 'nav.finance' },
   { id: 'planning', icon: <CalendarRange size={21} />, key: 'nav.planning' },
+  { id: 'billing', icon: <CreditCard size={21} />, key: 'nav.billing' },
   { id: 'profile', icon: <UserRound size={21} />, key: 'nav.profile' }
 ]
 
@@ -63,15 +64,20 @@ function IslandBar() {
   const locale = useStore((s) => s.settings.locale)
   const time = now.toLocaleTimeString(LOCALE_TAGS[locale], { hour: '2-digit', minute: '2-digit' })
   const date = now.toLocaleDateString(LOCALE_TAGS[locale], { weekday: 'short', day: 'numeric', month: 'short' })
+  const premium = useStore((s) => s.subscription.status === 'active')
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),6px)] z-40 flex justify-center">
+    <button
+      onClick={() => { haptic('select'); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+      aria-label="Tempo"
+      className="pointer-events-auto fixed inset-x-0 top-[max(env(safe-area-inset-top),6px)] z-40 mx-auto flex w-fit justify-center">
       <div className="glass-sm flex h-9 items-center gap-2.5 rounded-full px-4 !py-0 shadow-lg">
+        {premium && <span className="h-1.5 w-1.5 rounded-full bg-acc" title="Premium" />}
         <LogoMark size={17} />
         <span className="tabular text-[13px] font-bold">{time}</span>
         <span className="h-3.5 w-px bg-soft3" />
         <span className="text-[12px] font-medium text-t2 capitalize">{date}</span>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -168,9 +174,51 @@ function Reminders() {
   return null
 }
 
+function warmUpBillingServer() {
+  try {
+    const initData = (window as any)?.Telegram?.WebViewApp?.initData || ''
+    let token: string | null = null
+    try { token = localStorage.getItem('tempo-account-token') } catch { /* ignore */ }
+    const payload: any = initData ? { initData } : token ? { token } : {}
+    fetch('/port/3000/api/billing/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res: any) => {
+        if (res?.referralCode) {
+          try { localStorage.setItem('tempo-referral-code', res.referralCode) } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {})
+  } catch { /* ignore */ }
+}
+
 export default function App() {
   const [tab, setTab] = useState<TabId>('home')
   const themePref = useStore((s) => s.settings.theme)
+  const events = useStore((s) => s.events)
+  const eventReminders = useStore((s) => s.settings.eventReminders !== false)
+  useEffect(() => { warmUpBillingServer() }, [])
+  // push upcoming events to the server for Telegram reminders (debounced)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const initData = (window as any)?.Telegram?.WebViewApp?.initData || ''
+      let token = null
+      try { token = localStorage.getItem('tempo-account-token') } catch { /* ignore */ }
+      if (!initData && !token) return
+      const today = new Date().toISOString().slice(0, 10)
+      const soon = events
+        .filter((e: any) => e.date >= today)
+        .slice(0, 30)
+        .map((e: any) => ({ id: e.id, title: e.title, date: e.date, time: e.time || null }))
+      import('./lib/billing').then(({ remindersSync }) => {
+        remindersSync(initData, eventReminders ? soon : []).catch(() => {})
+      })
+    }, 3000)
+    return () => clearTimeout(id)
+  }, [events, eventReminders])
   const subscription = useStore((s) => s.subscription)
   const [celebrate, setCelebrate] = useState(false)
   useEffect(() => {
@@ -207,6 +255,7 @@ export default function App() {
   }
   return (
     <ToastProvider>
+      <div aria-hidden className={`glass-orbs${effects ? '' : ' no-effects'}`} />
       <div className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-[1080px] md:flex-row${effects ? '' : ' no-effects'}`}>
         <Sidebar tab={tab} go={go} />
         <main className="pt-island min-w-0 flex-1 px-4 pb-nav md:px-8 md:pb-10">
@@ -215,8 +264,8 @@ export default function App() {
             {tab === 'ai' && <Assistant />}
             {tab === 'finance' && <Finance />}
             {tab === 'planning' && <PlanningPage />}
-            {tab === 'billing' && <BillingPage />}
-            {tab === 'support' && <SupportPage />}
+            {tab === 'billing' && <BillingPage go={go} />}
+            {tab === 'support' && <SupportPage go={go} />}
             {tab === 'profile' && <Profile go={go} />}
           </div>
         </main>

@@ -10,7 +10,7 @@ import { t } from '../lib/i18n'
  * Dedicated Billing tab: current plan, usage and the pricing/payment sheet
  * (Telegram Stars or bank-card transfer — see PricingSheet).
  */
-export default function BillingPage() {
+export default function BillingPage({ go }: { go?: (tab: any) => void }) {
   const t2 = useT()
   const subscription = useStore((s) => s.subscription)
   const usage = useStore((s) => s.aiUsage)
@@ -61,7 +61,7 @@ export default function BillingPage() {
       </div>
 
       {/* pricing / payment */}
-      <PricingSheet />
+      <PricingSheet go={go} />
     </div>
   )
 }

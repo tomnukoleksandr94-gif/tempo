@@ -118,13 +118,23 @@ async function api(path: string, body?: object, timeoutMs = 8000): Promise<any> 
       body: payload ? JSON.stringify(payload) : undefined,
       signal: ctrl.signal
     })
-    if (!res.ok) return { error: `HTTP ${res.status}` }
+    if (!res.ok) return { error: res.status === 401 ? 'unauthorized' : `HTTP ${res.status}` }
     return await res.json()
   } catch (e: any) {
     return { error: e?.name === 'AbortError' ? 'timeout' : 'network' }
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** one retry wrapper — the billing server can take a moment to wake up */
+async function apiWithRetry(path: string, body?: object) {
+  let res = await api(path, body)
+  if (res && (res.error === 'timeout' || res.error === 'network')) {
+    await new Promise((r) => setTimeout(r, 1500))
+    res = await api(path, body)
+  }
+  return res
 }
 
 export interface ServerUserState {
@@ -134,13 +144,14 @@ export interface ServerUserState {
   autoRenew: boolean
   history: { id: string; plan: Plan; period: string; stars: number; status: string; ts: number }[]
   referrals: { invited: number; paying: number }
+  referralCode?: string
   billingAvailable: boolean
   cardPayments?: 'auto' | 'manual'
 }
 
 /** Ask the server for the authoritative subscription state. */
 export async function fetchUserState(initData: string): Promise<ServerUserState | { error: string }> {
-  return api('/billing/status', { initData })
+  return apiWithRetry('/billing/status', { initData })
 }
 
 /** Ask the server for a Telegram Stars invoice link for a plan. */
@@ -149,7 +160,7 @@ export async function createStarsInvoice(
   plan: Exclude<Plan, 'free'>,
   period: BillingPeriod
 ): Promise<{ link?: string; error?: string }> {
-  return api('/billing/stars-invoice', { initData, plan, period })
+  return apiWithRetry('/billing/stars-invoice', { initData, plan, period })
 }
 
 /** Ask the server for a LiqPay card-checkout link (automatic card payment). */
@@ -158,7 +169,7 @@ export async function createCardLink(
   plan: Exclude<Plan, 'free'>,
   period: BillingPeriod
 ): Promise<{ url?: string; error?: string }> {
-  return api('/billing/card-link', { initData, plan, period })
+  return apiWithRetry('/billing/card-link', { initData, plan, period })
 }
 
 // ---------- support chat ----------
@@ -167,12 +178,12 @@ export interface SupportMessage { from: 'user' | 'admin'; text: string; ts: numb
 
 /** Send a message to support. */
 export async function supportSend(initData: string, text: string): Promise<{ ok?: boolean; error?: string }> {
-  return api('/support/send', { initData, text })
+  return apiWithRetry('/support/send', { initData, text })
 }
 
 /** Fetch the user's support thread. */
 export async function supportHistory(initData: string): Promise<{ messages?: SupportMessage[]; error?: string }> {
-  return api('/support/history', { initData })
+  return apiWithRetry('/support/history', { initData })
 }
 
 /** Admin: list all support threads. */
@@ -188,6 +199,14 @@ export async function adminSupportThread(initData: string, userId: string): Prom
 /** Admin: reply to a user's support thread. */
 export async function adminSupportReply(initData: string, userId: string, text: string): Promise<{ ok?: boolean; error?: string }> {
   return api('/admin/support/reply', { initData, userId, text })
+}
+
+/** Push upcoming events to the server so it can send Telegram reminders. */
+export async function remindersSync(
+  initData: string,
+  events: { id: string; title: string; date: string; time?: string | null }[]
+): Promise<{ ok?: boolean; error?: string }> {
+  return api('/reminders/sync', { initData, events })
 }
 
 /** Cancel auto-renewal (server-side). */

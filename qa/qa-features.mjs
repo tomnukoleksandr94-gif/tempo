@@ -46,7 +46,7 @@ const hasNoEffects = await page.evaluate(() => document.querySelector('.no-effec
 // find the Animations row and click the toggle
 const animRow = page.locator('text=Анимации').first()
 if (await animRow.count()) {
-  await page.locator('button:has-text("Вкл")').last().click()
+  await page.locator('text=Анимации').locator('xpath=..').locator('button').click()
   await page.waitForTimeout(300)
   const off = await page.evaluate(() => document.querySelector('.no-effects') !== null)
   off ? ok('effects toggle adds .no-effects') : fail('effects toggle')
@@ -66,7 +66,9 @@ await page.waitForTimeout(600)
 const bill = await page.evaluate(() => document.body.innerText)
 bill.includes('Plus') && bill.includes('Pro') ? ok('billing pricing with plans') : fail('billing pricing with plans')
 const hasCard = /Банковск|Bank|Karte|carte/i.test(bill)
-console.log('card option present:', hasCard ? 'PASS' : 'FAIL')
+console.log('card option (hidden until LiqPay configured):', !hasCard ? 'PASS' : 'FAIL — should be hidden')
+const hasStars = /Stars/i.test(bill)
+console.log('stars option present:', hasStars ? 'PASS' : 'FAIL')
 await page.screenshot({ path: 'qa/shot-billing.jpg', type: 'jpeg', quality: 80 })
 
 // ---- 5. PWA assets served ----

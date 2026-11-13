@@ -12,7 +12,12 @@ import { fetchUserState } from '../lib/billing'
  */
 export function ReferralBlock() {
   const t2 = useT()
-  const referralCode = useStore((s) => s.referralCode)
+  const storeCode = useStore((s) => s.referralCode)
+  const [serverCode, setServerCode] = useState<string | null>(null)
+  useEffect(() => {
+    try { setServerCode(localStorage.getItem('tempo-referral-code')) } catch { /* ignore */ }
+  }, [])
+  const referralCode = serverCode || storeCode
   const referral = useStore((s) => s.referral)
   const setReferral = useStore((s) => s.setReferral)
   const [copied, setCopied] = useState(false)

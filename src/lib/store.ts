@@ -40,7 +40,8 @@ const initialSettings: Settings = {
   widgets: DEFAULT_WIDGETS,
   autoConfirm: false,
   theme: 'dark',
-  effects: true
+  effects: true,
+  eventReminders: true
 }
 
 /** Free until a payment is verified server-side. Never set locally. */

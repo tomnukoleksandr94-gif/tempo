@@ -2,7 +2,7 @@ import type { AiAction, AiResult, Currency, EventItem, Meal, Settings, Task, Tra
 import { todayISO, addDays, monthKey, startOfWeekISO } from './utils'
 
 // Built-in key (free tier). Rotatable in Profile → AI settings.
-const BUILTIN_KEY = 'AQ.Ab8RN6LXMjzMTS9a6y20pLDqosG0rpFwgHsr2mzvcT44r9wTkg'
+const BUILTIN_KEY = 'AQ.Ab8RN6KS3-aeHegpcdd_fE7hR75zeuuFpicMqetsnz3psd4ntg'
 
 export const MODELS = [
   { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },

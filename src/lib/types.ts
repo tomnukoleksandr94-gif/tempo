@@ -93,6 +93,7 @@ export interface Settings {
   autoConfirm: boolean
   theme: 'auto' | 'dark' | 'light'
   effects: boolean
+  eventReminders?: boolean
 }
 
 // ---------- subscription & billing ----------

@@ -10,6 +10,11 @@ export function setDefaultLocale(l: string) {
 }
 
 const ru: Dict = {
+  'plan.loginHint': 'Войдите в аккаунт (Профиль → Аккаунт), чтобы управлять подпиской, оплатой и поддержкой.',
+  'plan.loginBtn': 'Войти в аккаунт',
+  'support.loginHint': 'Войдите в аккаунт, чтобы написать в поддержку — в Telegram вход происходит автоматически.',
+  'pr.reminders': 'Напоминания о событиях',
+  'pr.remindersHint': 'Пришлю сообщение в Telegram за час до события',
   'pr.general': 'Общие',
   'plan.payCardAuto': 'Оплатить картой',
   'support.title': 'Поддержка',
@@ -341,6 +346,11 @@ const ru: Dict = {
 }
 
 const en: Dict = {
+  'plan.loginHint': 'Sign in to your account (Profile → Account) to manage your subscription, payments and support.',
+  'plan.loginBtn': 'Sign in',
+  'support.loginHint': 'Sign in to message support — inside Telegram you are signed in automatically.',
+  'pr.reminders': 'Event reminders',
+  'pr.remindersHint': 'I will send a Telegram message an hour before each event',
   'pr.general': 'General',
   'plan.payCardAuto': 'Pay by card',
   'support.title': 'Support',
@@ -672,6 +682,11 @@ const en: Dict = {
 }
 
 const uk: Dict = {
+  'plan.loginHint': 'Увійдіть в акаунт (Профіль → Аккаунт), щоб керувати підпискою, оплатою та підтримкою.',
+  'plan.loginBtn': 'Увійти в акаунт',
+  'support.loginHint': 'Увійдіть в акаунт, щоб написати в підтримку — в Telegram вхід відбувається автоматично.',
+  'pr.reminders': 'Нагадування про події',
+  'pr.remindersHint': 'Надішлю повідомлення в Telegram за годину до події',
   'pr.general': 'Загальні',
   'plan.payCardAuto': 'Оплатити карткою',
   'support.title': 'Підтримка',
@@ -983,6 +998,11 @@ const uk: Dict = {
 }
 
 const de: Dict = {
+  'plan.loginHint': 'Melde dich an (Profil → Konto), um Abo, Zahlungen und Support zu verwalten.',
+  'plan.loginBtn': 'Anmelden',
+  'support.loginHint': 'Melde dich an, um den Support zu schreiben — in Telegram passiert das automatisch.',
+  'pr.reminders': 'Termin-Erinnerungen',
+  'pr.remindersHint': 'Ich sende eine Telegram-Nachricht eine Stunde vor dem Termin',
   'pr.general': 'Allgemein',
   'plan.payCardAuto': 'Mit Karte zahlen',
   'support.title': 'Support',
@@ -1294,6 +1314,11 @@ const de: Dict = {
 }
 
 const fr: Dict = {
+  'plan.loginHint': "Connecte-toi (Profil → Compte) pour gérer ton abonnement, les paiements et l'assistance.",
+  'plan.loginBtn': 'Se connecter',
+  'support.loginHint': "Connecte-toi pour écrire à l'assistance — dans Telegram, c'est automatique.",
+  'pr.reminders': "Rappels d'événements",
+  'pr.remindersHint': "J'enverrai un message Telegram une heure avant chaque événement",
   'pr.general': 'Général',
   'plan.payCardAuto': 'Payer par carte',
   'support.title': 'Assistance',

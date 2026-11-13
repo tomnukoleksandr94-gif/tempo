@@ -20,16 +20,16 @@ html[data-theme='dark'] {
   --bg: #000000;
   --s1: #0d0d0f;
   --s2: #15151a;
-  --glass: rgba(22, 22, 26, 0.68);
-  --glass-brd: rgba(255, 255, 255, 0.08);
-  --glass-brd2: rgba(255, 255, 255, 0.14);
+  --glass: rgba(24, 24, 29, 0.66);
+  --glass-brd: rgba(255, 255, 255, 0.14);
+  --glass-brd2: rgba(255, 255, 255, 0.22);
   --soft-bg: rgba(255, 255, 255, 0.05);
   --soft-bg2: rgba(255, 255, 255, 0.09);
   --soft-bg3: rgba(255, 255, 255, 0.14);
   --line: rgba(255, 255, 255, 0.08);
   --line2: rgba(255, 255, 255, 0.16);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-  --glass-nav: rgba(10, 10, 12, 0.78);
+  --glass-nav: rgba(10, 10, 12, 0.72);
   --accent: #8e7bef;
   --accent-soft: rgba(142, 123, 239, 0.15);
   --color-t1: #f5f5f7;
@@ -151,7 +151,8 @@ h3 {
   backdrop-filter: blur(28px) saturate(170%);
   border: 1px solid var(--glass-brd);
   border-radius: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0) 38%);
 }
 
 .glass-sm {
@@ -160,6 +161,11 @@ h3 {
   backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid var(--glass-brd);
   border-radius: 16px;
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 42%);
+}
+
+.glass:hover {
+  border-color: var(--glass-brd2);
 }
 
 .glass-nav {
@@ -457,3 +463,45 @@ input[type='time'].inp::-webkit-calendar-picker-indicator {
                          calc(-50% + sin(calc(var(--i) * 45deg)) * 58px)) scale(1);
   }
 }
+
+/* ---------- decorative orbs: give the glass something to blur ---------- */
+.glass-orbs {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.glass-orbs::before,
+.glass-orbs::after {
+  content: '';
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.35;
+}
+.glass-orbs::before {
+  top: -18vmax;
+  left: -14vmax;
+  background: radial-gradient(circle at 35% 35%, var(--acc-soft, rgba(139, 92, 246, 0.5)), transparent 60%);
+  animation: orb-drift 26s ease-in-out infinite alternate;
+}
+.glass-orbs::after {
+  bottom: -22vmax;
+  right: -16vmax;
+  background: radial-gradient(circle at 60% 40%, rgba(59, 130, 246, 0.45), transparent 60%);
+  animation: orb-drift 32s ease-in-out infinite alternate-reverse;
+}
+@keyframes orb-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
+}
+.glass-orbs.no-effects::before,
+.glass-orbs.no-effects::after {
+  animation: none;
+  opacity: 0.22;
+}
+[data-theme='light'] .glass-orbs::before { opacity: 0.28; }
+[data-theme='light'] .glass-orbs::after { opacity: 0.22; }

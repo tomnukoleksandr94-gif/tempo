@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Check, Copy, CreditCard, Crown, Sparkles, XCircle } from 'lucide-react'
+import { Check, CreditCard, Crown, LogIn, Sparkles, XCircle } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { useT } from '../lib/hooks'
 import { useToast } from './ui'
 import { tg, haptic } from '../lib/telegram'
 import {
-  PLANS, PLAN_ORDER, planPrice, CARD_PAY, submitCardRequest,
+  PLANS, PLAN_ORDER, planPrice,
   effectivePlan, fetchUserState, createStarsInvoice, createCardLink, cancelSubscription
 } from '../lib/billing'
 import type { BillingPeriod, Plan } from '../lib/types'
@@ -19,7 +19,7 @@ import { Btn } from './ui'
  * - no card data of the payer is ever collected;
  * - if the billing server is unreachable, it says so — no fake activations.
  */
-export function PricingSheet({ onClose }: { onClose?: () => void }) {
+export function PricingSheet({ onClose, go }: { onClose?: () => void; go?: (tab: any) => void }) {
   const t2 = useT()
   const toast = useToast()
   const subscription = useStore((s) => s.subscription)
@@ -28,9 +28,8 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
   const [busy, setBusy] = useState<Plan | null>(null)
   const [serverOk, setServerOk] = useState<boolean | null>(null)
   const [method, setMethod] = useState<'stars' | 'card'>('stars')
-  const [cardPlan, setCardPlan] = useState<Exclude<Plan, 'free'> | null>(null)
-  const [cardSent, setCardSent] = useState(false)
   const [cardMode, setCardMode] = useState<'auto' | 'manual' | null>(null)
+  const [needLogin, setNeedLogin] = useState(false)
   // auto card payment: poll status when the user returns from the checkout
   useEffect(() => {
     function onFocus() { refreshState() }
@@ -68,11 +67,15 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
       const res = await fetchUserState(initData)
       if (cancelled) return
       if ('error' in res) {
+        if (res.error === 'unauthorized') setNeedLogin(true)
         setServerOk(false)
         return
       }
       setServerOk(true)
       if (res.cardPayments) setCardMode(res.cardPayments)
+      if (res.referralCode) {
+        try { localStorage.setItem('tempo-referral-code', res.referralCode) } catch { /* ignore */ }
+      }
       syncSubscription({
         plan: res.plan,
         status: res.status,
@@ -111,20 +114,6 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
     setBusy(null)
   }
 
-  async function cardRequest(plan: Exclude<Plan, 'free'>) {
-    setBusy(plan)
-    haptic('medium')
-    const res = await submitCardRequest(tg?.initData || '', plan, period)
-    if (res?.ok) {
-      setCardSent(true)
-      toast(t2('plan.cardSent'), 'ok')
-    } else {
-      haptic('error')
-      toast(t2('plan.cardFail'), 'err')
-    }
-    setBusy(null)
-  }
-
   async function payByCard(plan: Exclude<Plan, 'free'>) {
     setBusy(plan)
     haptic('medium')
@@ -147,15 +136,6 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
     setBusy(null)
   }
 
-  const copyCard = async () => {
-    try {
-      await navigator.clipboard.writeText(CARD_PAY.number.replace(/\s/g, ''))
-      toast(t2('plan.cardCopied'), 'ok')
-    } catch {
-      toast(CARD_PAY.number, 'info')
-    }
-  }
-
   return (
     <div className="flex flex-col gap-3">
       {/* period toggle */}
@@ -173,8 +153,8 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
         ))}
       </div>
 
-      {/* payment method toggle */}
-      {cardPlan === null && (
+      {/* payment method toggle (card shown only when LiqPay checkout is configured) */}
+      {cardMode === 'auto' && (
         <div className="glass-sm flex items-center gap-1 p-1">
           <button
             onClick={() => setMethod('stars')}
@@ -194,48 +174,6 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
             <CreditCard size={14} className={method === 'card' ? 'text-acc' : ''} />
             {t2('plan.payCard')}
           </button>
-        </div>
-      )}
-
-      {/* card transfer view (manual mode only — automatic mode opens LiqPay checkout) */}
-      {cardPlan !== null && cardMode !== 'auto' && (
-        <div className="glass-sm flex flex-col gap-3 p-4">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-[15px] font-bold">
-              <CreditCard size={15} className="text-acc" />
-              {t2('plan.cardTitle')}
-            </span>
-            <button className="press text-[13px] font-semibold text-t2" onClick={() => { setCardPlan(null); setCardSent(false) }}>
-              {t2('c.back')}
-            </button>
-          </div>
-
-          <div className="rounded-2xl bg-soft p-3.5">
-            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-t3">{t2('plan.cardNumber')}</div>
-            <button onClick={copyCard} className="press flex w-full items-center justify-between gap-2">
-              <span className="tabular text-[19px] font-extrabold tracking-wide">{CARD_PAY.number}</span>
-              <Copy size={16} className="shrink-0 text-acc" />
-            </button>
-          </div>
-
-          <div className="flex items-baseline justify-between text-[13px]">
-            <span className="text-t2">{t2('plan.cardAmount')}</span>
-            <span className="tabular text-[15px] font-bold">
-              €{planPrice(cardPlan, period).toFixed(2)} · {t2(`plan.${cardPlan}`)} · {t2(period === 'monthly' ? 'plan.monthly' : 'plan.annualBtn')}
-            </span>
-          </div>
-
-          <p className="text-[12px] leading-relaxed text-t2">{t2('plan.cardHow')}</p>
-
-          {cardSent ? (
-            <div className="rounded-2xl bg-accent-soft px-3.5 py-3 text-[13px] font-semibold text-acc2">
-              {t2('plan.cardSentNote')}
-            </div>
-          ) : (
-            <Btn className="w-full" variant="primary" disabled={busy !== null || !serverOk} onClick={() => cardRequest(cardPlan)}>
-              {t2('plan.iPaid')}
-            </Btn>
-          )}
         </div>
       )}
 
@@ -286,8 +224,8 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
               <Btn
                 className="w-full"
                 variant={isCurrent ? 'ghost' : 'primary'}
-                disabled={isCurrent || !serverOk || busy !== null || (method === 'stars' && !tg?.initData) || (method === 'card' && cardMode === 'auto' && !tg?.initData)}
-                onClick={() => (method === 'card' ? (cardMode === 'auto' ? payByCard(p) : setCardPlan(p)) : pay(p))}
+                disabled={isCurrent || !serverOk || busy !== null || !tg?.initData}
+                onClick={() => (method === 'card' ? payByCard(p) : pay(p))}
               >
                 {isCurrent
                   ? t2('plan.current')
@@ -300,10 +238,25 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
         )
       })}
 
-      <p className="px-1 text-[11px] leading-relaxed text-t3">{t2(method === 'card' ? 'plan.cardNote' : 'plan.starsNote')}</p>
+      <p className="px-1 text-[11px] leading-relaxed text-t3">{t2('plan.starsNote')}</p>
+
+      {/* login prompt (web visitors without an account) */}
+      {needLogin && (
+        <div className="glass-sm flex flex-col items-start gap-2.5 p-4">
+          <div className="flex items-start gap-2.5 text-[13px] leading-relaxed text-t2">
+            <LogIn size={15} className="mt-0.5 shrink-0 text-acc" />
+            {t2('plan.loginHint')}
+          </div>
+          {go && (
+            <Btn variant="primary" className="w-full" onClick={() => { go('profile'); onClose?.() }}>
+              {t2('plan.loginBtn')}
+            </Btn>
+          )}
+        </div>
+      )}
 
       {/* honest unavailability */}
-      {serverOk === false && (
+      {serverOk === false && !needLogin && (
         <div className="flex items-start gap-2.5 rounded-2xl bg-soft p-3.5 text-[12px] leading-relaxed text-t2">
           <XCircle size={14} className="mt-0.5 shrink-0 text-red" />
           {t2('plan.serverOff')}
