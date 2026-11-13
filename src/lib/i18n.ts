@@ -10,6 +10,18 @@ export function setDefaultLocale(l: string) {
 }
 
 const ru: Dict = {
+  'pr.general': 'Общие',
+  'plan.payCardAuto': 'Оплатить картой',
+  'support.title': 'Поддержка',
+  'support.subtitle': 'Мы ответим в течение суток',
+  'support.adminSub': 'Входящие сообщения',
+  'support.placeholder': 'Напишите сообщение…',
+  'support.send': 'Отправить',
+  'support.empty': 'Пока нет обращений',
+  'support.hello': 'Здравствуйте! Напишите нам — ответим в течение суток.',
+  'pay.thanks': 'Спасибо за поддержку!',
+  'pay.activated': 'Подписка активирована. Приятного использования Tempo ⚡',
+  'pr.support': 'Поддержка',
   'pr.effects': 'Анимации', 'pr.on': 'Вкл', 'pr.off': 'Выкл',
   'g.night': 'Доброй ночи',
   'g.morning': 'Доброе утро',
@@ -329,6 +341,18 @@ const ru: Dict = {
 }
 
 const en: Dict = {
+  'pr.general': 'General',
+  'plan.payCardAuto': 'Pay by card',
+  'support.title': 'Support',
+  'support.subtitle': 'We reply within 24 hours',
+  'support.adminSub': 'Inbox',
+  'support.placeholder': 'Write a message…',
+  'support.send': 'Send',
+  'support.empty': 'No requests yet',
+  'support.hello': 'Hi! Write to us — we reply within 24 hours.',
+  'pay.thanks': 'Thank you for your support!',
+  'pay.activated': 'Your subscription is active. Enjoy Tempo ⚡',
+  'pr.support': 'Support',
   'pr.effects': 'Animations', 'pr.on': 'On', 'pr.off': 'Off',
   'g.night': 'Good night',
   'g.morning': 'Good morning',
@@ -648,6 +672,18 @@ const en: Dict = {
 }
 
 const uk: Dict = {
+  'pr.general': 'Загальні',
+  'plan.payCardAuto': 'Оплатити карткою',
+  'support.title': 'Підтримка',
+  'support.subtitle': 'Відповімо протягом доби',
+  'support.adminSub': 'Вхідні повідомлення',
+  'support.placeholder': 'Напишіть повідомлення…',
+  'support.send': 'Надіслати',
+  'support.empty': 'Поки що немає звернень',
+  'support.hello': 'Вітаємо! Напишіть нам — відповімо протягом доби.',
+  'pay.thanks': 'Дякуємо за підтримку!',
+  'pay.activated': 'Підписку активовано. Приємного користування Tempo ⚡',
+  'pr.support': 'Підтримка',
   'pr.effects': 'Анімації', 'pr.on': 'Увімк', 'pr.off': 'Вимк',
   'g.night': 'Доброї ночі',
   'g.morning': 'Доброго ранку',
@@ -947,6 +983,18 @@ const uk: Dict = {
 }
 
 const de: Dict = {
+  'pr.general': 'Allgemein',
+  'plan.payCardAuto': 'Mit Karte zahlen',
+  'support.title': 'Support',
+  'support.subtitle': 'Antwort innerhalb von 24 Stunden',
+  'support.adminSub': 'Posteingang',
+  'support.placeholder': 'Nachricht schreiben…',
+  'support.send': 'Senden',
+  'support.empty': 'Noch keine Anfragen',
+  'support.hello': 'Hallo! Schreib uns — wir antworten innerhalb von 24 Stunden.',
+  'pay.thanks': 'Danke für deine Unterstützung!',
+  'pay.activated': 'Dein Abo ist aktiv. Viel Spaß mit Tempo ⚡',
+  'pr.support': 'Support',
   'pr.effects': 'Animationen', 'pr.on': 'Ein', 'pr.off': 'Aus',
   'g.night': 'Gute Nacht',
   'g.morning': 'Guten Morgen',
@@ -1246,6 +1294,18 @@ const de: Dict = {
 }
 
 const fr: Dict = {
+  'pr.general': 'Général',
+  'plan.payCardAuto': 'Payer par carte',
+  'support.title': 'Assistance',
+  'support.subtitle': 'Réponse sous 24 heures',
+  'support.adminSub': 'Boîte de réception',
+  'support.placeholder': 'Écrire un message…',
+  'support.send': 'Envoyer',
+  'support.empty': 'Aucune demande',
+  'support.hello': "Bonjour ! Écrivez-nous — réponse sous 24 heures.",
+  'pay.thanks': 'Merci pour votre soutien !',
+  'pay.activated': 'Votre abonnement est actif. Profitez de Tempo ⚡',
+  'pr.support': 'Assistance',
   'pr.effects': 'Animations', 'pr.on': 'Actif', 'pr.off': 'Inactif',
   'g.night': 'Bonne nuit',
   'g.morning': 'Bonjour',

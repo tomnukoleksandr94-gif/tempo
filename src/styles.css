@@ -4,7 +4,7 @@
   --font-sans: 'Manrope', -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --color-t1: #f5f5f7;
   --color-t2: #9a9aa2;
-  --color-t3: #5d5d64;
+  --color-t3: #7a7a83;
   --color-acc: #8e7bef;
   --color-acc2: #b3a7f7;
   --color-green: #30d158;
@@ -34,7 +34,7 @@ html[data-theme='dark'] {
   --accent-soft: rgba(142, 123, 239, 0.15);
   --color-t1: #f5f5f7;
   --color-t2: #9a9aa2;
-  --color-t3: #5d5d64;
+  --color-t3: #7a7a83;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --nav-h: 64px;
   color-scheme: dark;
@@ -410,4 +410,50 @@ input[type='time'].inp::-webkit-calendar-picker-indicator {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+
+/* ---------- page transition (tab switch) ---------- */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.page-enter {
+  animation: page-in 0.28s var(--ease) both;
+}
+
+/* ---------- payment success overlay ---------- */
+.anim-fade { animation: fade 0.3s var(--ease) both; }
+.anim-pop { animation: pop 0.5s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both; }
+
+.anim-draw-circle {
+  stroke-dasharray: 264;
+  stroke-dashoffset: 264;
+  animation: dash 0.7s var(--ease) 0.1s forwards;
+}
+.anim-draw-check {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: dash 0.4s var(--ease) 0.65s forwards;
+}
+@keyframes dash { to { stroke-dashoffset: 0; } }
+
+.particle {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 5px; height: 5px;
+  border-radius: 9999px;
+  background: var(--accent, #8E7BEF);
+  opacity: 0;
+  animation: burst 0.9s var(--ease) 0.55s both;
+}
+.particle:nth-child(odd) { background: rgba(255,255,255,0.75); }
+@keyframes burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  25% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + cos(calc(var(--i) * 45deg)) * 58px),
+                         calc(-50% + sin(calc(var(--i) * 45deg)) * 58px)) scale(1);
+  }
 }

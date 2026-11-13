@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 
 const URL = 'http://127.0.0.1:4173'
 const browser = await chromium.launch({ headless: true, channel: 'chromium' })
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ru-RU' })
 const page = await ctx.newPage()
 const errors = []
 page.on('pageerror', e => errors.push('pageerror: ' + String(e)))
@@ -60,16 +60,13 @@ if (await animRow.count()) {
   fail('animations row found')
 }
 
-// ---- 4. billing tab still present + card payment flow ----
-await page.locator('text=Оплата').last().click()
-await page.waitForTimeout(500)
+// ---- 4. billing: Profile -> subscription card -> pricing sheet ----
+await page.locator('button:has-text("Free")').first().click()
+await page.waitForTimeout(600)
 const bill = await page.evaluate(() => document.body.innerText)
-bill.includes('Plus') && bill.includes('Pro') ? ok('billing tab with plans') : fail('billing tab with plans')
-// pick card method on Plus monthly
-await page.locator('text=Plus').first().click()
-await page.waitForTimeout(300)
-const hasCard = await page.locator('text=карт').count() + await page.locator('text=Carte').count() + await page.locator('text=Card').count()
-console.log('card option present:', hasCard > 0 ? 'PASS' : 'FAIL')
+bill.includes('Plus') && bill.includes('Pro') ? ok('billing pricing with plans') : fail('billing pricing with plans')
+const hasCard = /Банковск|Bank|Karte|carte/i.test(bill)
+console.log('card option present:', hasCard ? 'PASS' : 'FAIL')
 await page.screenshot({ path: 'qa/shot-billing.jpg', type: 'jpeg', quality: 80 })
 
 // ---- 5. PWA assets served ----
@@ -78,7 +75,14 @@ for (const path of ['/manifest.webmanifest', '/img/icon-192.png', '/img/start.jp
   r.ok() ? ok('asset ' + path) : fail('asset ' + path, String(r.status()))
 }
 
-// ---- 6. login page (web register) ----
+// ---- 6. support page ----
+await page.locator('text=Профиль').last().click()
+await page.waitForTimeout(300)
+await page.locator('text=Поддержка').first().click()
+await page.waitForTimeout(600)
+const sup = await page.evaluate(() => document.body.innerText)
+sup.includes('Напишите') || sup.includes('поддержк') ? ok('support page opens') : fail('support page opens', JSON.stringify(sup.slice(0, 200)))
+await page.screenshot({ path: 'qa/shot-support.jpg', type: 'jpeg', quality: 80 })
 await page.locator('text=Профиль').last().click()
 await page.waitForTimeout(300)
 

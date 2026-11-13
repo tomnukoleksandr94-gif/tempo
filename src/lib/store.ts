@@ -17,9 +17,22 @@ export const DATA_KEY = 'tempo-data-v1'
 
 export const DEFAULT_WIDGETS = ['overview', 'insight', 'upcoming', 'tasks', 'weekSpending', 'nutrition', 'history']
 
+/** Detect the user's system/Telegram language and map it to a UI language. */
+export function detectLocale(): 'ru' | 'uk' | 'en' | 'de' | 'fr' {
+  try {
+    const tgUser = (window as any)?.Telegram?.WebViewApp?.initDataUnsafe?.user
+    const code = String(tgUser?.language_code || navigator.language || 'en').toLowerCase()
+    if (/^(ru|be|kk|ky|uz|hy|az)/.test(code)) return 'ru'
+    if (code.startsWith('uk')) return 'uk'
+    if (code.startsWith('de')) return 'de'
+    if (code.startsWith('fr')) return 'fr'
+    return 'en'
+  } catch { return 'en' }
+}
+
 const initialSettings: Settings = {
   name: '',
-  locale: 'ru',
+  locale: detectLocale(),
   currency: 'EUR',
   model: 'gemini-3.5-flash-lite',
   apiKey: '',
@@ -473,6 +486,10 @@ export const useStore = create<Store>()(
           persisted.state.subscription = freeSubscription()
         }
         persisted.state.settings = { ...initialSettings, ...(persisted.state.settings || {}) }
+        // follow the system language until the user picks one explicitly
+        if (!persisted.state.settings.localeChosen) {
+          persisted.state.settings.locale = detectLocale()
+        }
         persisted.state.subscription = persisted.state.subscription || freeSubscription()
         persisted.state.referralCode = persisted.state.referralCode || uid().slice(0, 8)
         persisted.state.referral = persisted.state.referral || { invited: 0, paying: 0, claimed: [] }

@@ -6,7 +6,7 @@ import { useToast } from './ui'
 import { tg, haptic } from '../lib/telegram'
 import {
   PLANS, PLAN_ORDER, planPrice, CARD_PAY, submitCardRequest,
-  effectivePlan, fetchUserState, createStarsInvoice, cancelSubscription
+  effectivePlan, fetchUserState, createStarsInvoice, createCardLink, cancelSubscription
 } from '../lib/billing'
 import type { BillingPeriod, Plan } from '../lib/types'
 import { Btn } from './ui'
@@ -30,6 +30,29 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
   const [method, setMethod] = useState<'stars' | 'card'>('stars')
   const [cardPlan, setCardPlan] = useState<Exclude<Plan, 'free'> | null>(null)
   const [cardSent, setCardSent] = useState(false)
+  const [cardMode, setCardMode] = useState<'auto' | 'manual' | null>(null)
+  // auto card payment: poll status when the user returns from the checkout
+  useEffect(() => {
+    function onFocus() { refreshState() }
+    document.addEventListener('visibilitychange', onFocus)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onFocus)
+      window.removeEventListener('focus', onFocus)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  async function refreshState() {
+    const initData = tg?.initData || ''
+    if (!initData) return
+    const st = await fetchUserState(initData)
+    if (!('error' in st)) {
+      syncSubscription({
+        plan: st.plan, status: st.status, expiresAt: st.expiresAt, autoRenew: st.autoRenew,
+        history: st.history.map((h: any) => ({ id: h.id, plan: h.plan, period: h.period, stars: h.stars, status: h.status, ts: h.ts }))
+      })
+    }
+  }
 
   // fetch authoritative state from the server (Telegram initData or account token)
   useEffect(() => {
@@ -49,6 +72,7 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
         return
       }
       setServerOk(true)
+      if (res.cardPayments) setCardMode(res.cardPayments)
       syncSubscription({
         plan: res.plan,
         status: res.status,
@@ -94,6 +118,28 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
     if (res?.ok) {
       setCardSent(true)
       toast(t2('plan.cardSent'), 'ok')
+    } else {
+      haptic('error')
+      toast(t2('plan.cardFail'), 'err')
+    }
+    setBusy(null)
+  }
+
+  async function payByCard(plan: Exclude<Plan, 'free'>) {
+    setBusy(plan)
+    haptic('medium')
+    const res = await createCardLink(tg?.initData || '', plan, period)
+    if (res?.url) {
+      try {
+        tg?.openLink?.(res.url)
+      } catch {
+        window.open(res.url, '_blank')
+      }
+      // poll for activation while/after the user pays on LiqPay's page
+      const poll = setInterval(async () => {
+        await refreshState()
+      }, 6000)
+      setTimeout(() => clearInterval(poll), 180000)
     } else {
       haptic('error')
       toast(t2('plan.cardFail'), 'err')
@@ -151,8 +197,8 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
         </div>
       )}
 
-      {/* card transfer view */}
-      {cardPlan !== null && (
+      {/* card transfer view (manual mode only — automatic mode opens LiqPay checkout) */}
+      {cardPlan !== null && cardMode !== 'auto' && (
         <div className="glass-sm flex flex-col gap-3 p-4">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-[15px] font-bold">
@@ -240,13 +286,13 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
               <Btn
                 className="w-full"
                 variant={isCurrent ? 'ghost' : 'primary'}
-                disabled={isCurrent || !serverOk || busy !== null || (method === 'stars' && !tg?.initData)}
-                onClick={() => (method === 'card' ? setCardPlan(p) : pay(p))}
+                disabled={isCurrent || !serverOk || busy !== null || (method === 'stars' && !tg?.initData) || (method === 'card' && cardMode === 'auto' && !tg?.initData)}
+                onClick={() => (method === 'card' ? (cardMode === 'auto' ? payByCard(p) : setCardPlan(p)) : pay(p))}
               >
                 {isCurrent
                   ? t2('plan.current')
                   : method === 'card'
-                    ? t2('plan.payCardBtn')
+                    ? t2(cardMode === 'auto' ? 'plan.payCardAuto' : 'plan.payCardBtn')
                     : `${t2('plan.starsPay')} · ${period === 'monthly' ? def.starsMonthly : def.starsAnnual} ⭐`}
               </Btn>
             )}

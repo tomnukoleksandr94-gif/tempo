@@ -84,6 +84,7 @@ export interface CustomFood {
 export interface Settings {
   name: string
   locale: 'ru' | 'uk' | 'en' | 'de' | 'fr'
+  localeChosen?: boolean
   currency: Currency
   model: string
   apiKey: string

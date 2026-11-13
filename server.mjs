@@ -48,6 +48,18 @@ const DATA_FILE = new URL('./data.json', import.meta.url).pathname
 const BACKUP_FILE = new URL('./data.backup.json', import.meta.url).pathname
 const TG_API = (m) => `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
 
+// ---------- LiqPay (automatic bank-card payments) ----------
+// Checkout is hosted by LiqPay — the payer's card data never touches our
+// server. Money goes to the merchant's LiqPay account (payout to card).
+// Activation is automatic via the LiqPay server-to-server callback.
+const LIQPAY_PUBLIC = process.env.LIQPAY_PUBLIC_KEY || ''
+const LIQPAY_PRIVATE = process.env.LIQPAY_PRIVATE_KEY || ''
+const LIQPAY_URL = 'https://www.liqpay.ua/api/3/checkout/'
+const liqpayEnabled = () => !!(LIQPAY_PUBLIC && LIQPAY_PRIVATE)
+function liqpaySign(dataB64) {
+  return crypto.createHash('sha1').update(LIQPAY_PRIVATE + dataB64 + LIQPAY_PRIVATE).digest('base64')
+}
+
 // Stars prices (XTR) — must match src/lib/billing.ts
 const STARS = {
   plus: { monthly: 250, annual: 2500 },
@@ -387,11 +399,30 @@ const server = http.createServer(async (req, res) => {
           'Plus (€4.99/мес или 250 ⭐) — безлимит AI, все разделы\n' +
           'Pro (€8.99/мес или 450 ⭐) — приоритетная поддержка + ранняя доступность новых функций\n\n' +
           'Оплата картой и Telegram Stars — внутри приложения.'
-        fetch(TG_API('sendMessage'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
-        }).catch(() => {})
+        if (APP_URL.startsWith('https')) {
+          fetch(TG_API('sendPhoto'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              photo: APP_URL + '/img/bot-plans.jpg',
+              caption: msg,
+              reply_markup: kb
+            })
+          }).catch(() => {
+            fetch(TG_API('sendMessage'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
+            }).catch(() => {})
+          })
+        } else {
+          fetch(TG_API('sendMessage'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
+          }).catch(() => {})
+        }
         return json(res, 200, { ok: true })
       }
       if (cmd === '/help') {
@@ -399,11 +430,30 @@ const server = http.createServer(async (req, res) => {
           'Tempo — AI Life OS: финансы, календарь, задачи и питание.\n\n' +
           '/start — начать работу\n/app — открыть приложение\n/plans — тарифы\n/help — эта справка\n\n' +
           'Просто напишите боту, что произошло:\n«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00» — ИИ сам всё разложит по разделам.'
-        fetch(TG_API('sendMessage'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
-        }).catch(() => {})
+        if (APP_URL.startsWith('https')) {
+          fetch(TG_API('sendPhoto'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              photo: APP_URL + '/img/start.jpg',
+              caption: msg,
+              reply_markup: kb
+            })
+          }).catch(() => {
+            fetch(TG_API('sendMessage'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
+            }).catch(() => {})
+          })
+        } else {
+          fetch(TG_API('sendMessage'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
+          }).catch(() => {})
+        }
         return json(res, 200, { ok: true })
       }
     }
@@ -474,7 +524,7 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req)
     const r = resolveUser(body)
     if (!r) return json(res, 401, { error: 'unauthorized' })
-    return json(res, 200, { ...publicState(r.u), billingAvailable: true, role: r.acc ? r.acc.role : 'user', username: r.acc ? r.acc.username : null })
+    return json(res, 200, { ...publicState(r.u), billingAvailable: true, cardPayments: liqpayEnabled() ? 'auto' : 'manual', role: r.acc ? r.acc.role : 'user', username: r.acc ? r.acc.username : null })
   }
 
   if (req.url === '/api/billing/stars-invoice' && req.method === 'POST') {
@@ -501,8 +551,68 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { link: inv.result })
   }
 
-  // card transfer: the user reports they paid by bank card; the owner verifies
-  // the incoming transfer and activates the plan manually (admin grant)
+  // automatic card payment: LiqPay checkout link (payer enters their card on
+  // LiqPay's hosted page — we never see card data)
+  if (req.url === '/api/billing/card-link' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    if (!r) return json(res, 401, { error: 'unauthorized' })
+    if (!liqpayEnabled()) return json(res, 503, { error: 'card payments not configured' })
+    if (!STARS[body.plan]) return json(res, 400, { error: 'bad plan' })
+    const period = body.period === 'annual' ? 'annual' : 'monthly'
+    const userId = r.acc ? r.acc.userId : String(r.u === null ? '' : (r.u.id || ''))
+    const amount = EUR[body.plan][period]
+    const orderId = `lp_${userId}_${body.plan}_${period}_${Date.now()}`
+    const data = Buffer.from(JSON.stringify({
+      version: 3,
+      public_key: LIQPAY_PUBLIC,
+      action: 'pay',
+      amount,
+      currency: 'EUR',
+      description: `Tempo ${body.plan === 'plus' ? 'Plus' : 'Pro'} — ${period === 'annual' ? 'год' : 'месяц'}`,
+      order_id: orderId,
+      language: 'ru',
+      server_url: APP_URL + '/port/3000/api/liqpay-callback',
+      result_url: APP_URL
+    })).toString('base64')
+    return json(res, 200, { url: LIQPAY_URL + '?data=' + encodeURIComponent(data) + '&signature=' + encodeURIComponent(liqpaySign(data)) })
+  }
+
+  // LiqPay server-to-server callback: verify signature, auto-activate on success
+  if (req.url === '/api/liqpay-callback' && req.method === 'POST') {
+    const body = await readBody(req)
+    const dataB64 = String(body?.data || '')
+    const signature = String(body?.signature || '')
+    if (!dataB64 || !signature || signature !== liqpaySign(dataB64)) {
+      return json(res, 403, { error: 'bad signature' })
+    }
+    let ev = {}
+    try { ev = JSON.parse(Buffer.from(dataB64, 'base64').toString('utf8')) } catch { return json(res, 400, { error: 'bad data' }) }
+    // order_id format: lp_<userId>_<plan>_<period>_<ts>
+    const m = String(ev.order_id || '').match(/^lp_(.+)_(plus|pro)_(monthly|annual)_\d+$/)
+    if (m && (ev.status === 'success' || ev.status === 'sandbox')) {
+      const u = user(m[1])
+      // idempotency: skip if this exact order was already processed
+      const seen = u.history.some((h) => h.id === ev.order_id)
+      if (!seen) {
+        u.payments[ev.order_id] = { plan: m[2], period: m[3], ts: Date.now() }
+        u.history.unshift({ id: ev.order_id, plan: m[2], period: m[3], stars: 0, status: 'paid', ts: Date.now() })
+        u.history = u.history.slice(0, 50)
+        const now = new Date()
+        const days = m[3] === 'annual' ? 365 : 30
+        const base = u.expiresAt && u.expiresAt > now.toISOString() ? new Date(u.expiresAt) : now
+        u.expiresAt = new Date(base.getTime() + days * 86400000).toISOString()
+        u.plan = m[2]
+        u.period = m[3]
+        u.status = 'active'
+        save()
+      }
+    }
+    return json(res, 200, { ok: true })
+  }
+
+  // card transfer (manual fallback): the user reports they paid by bank card;
+  // the owner verifies the transfer and activates the plan manually (admin grant)
   if (req.url === '/api/billing/card-request' && req.method === 'POST') {
     const body = await readBody(req)
     const r = resolveUser(body)
@@ -525,6 +635,45 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true })
   }
 
+  // --- support chat (user <-> admin) ---
+  const supportThread = (userId) => {
+    db.support = db.support || {}
+    if (!db.support[userId]) {
+      db.support[userId] = { userId, username: null, unread: 0, messages: [] }
+    }
+    return db.support[userId]
+  }
+  const lastSupportMsg = {}
+
+  if (req.url === '/api/support/send' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    if (!r) return json(res, 401, { error: 'unauthorized' })
+    const text = String(body.text || '').trim().slice(0, 1000)
+    if (!text) return json(res, 400, { error: 'empty message' })
+    // light rate limit: 1 message per 5 seconds per user
+    const now = Date.now()
+    if (lastSupportMsg[r.u.id] && now - lastSupportMsg[r.u.id] < 5000) {
+      return json(res, 429, { error: 'too fast' })
+    }
+    lastSupportMsg[r.u.id] = now
+    const th = supportThread(r.u.id)
+    th.username = r.acc ? r.acc.username : (r.u.tgUsername || null)
+    th.messages.push({ from: 'user', text, ts: now })
+    th.messages = th.messages.slice(-100)
+    th.unread += 1
+    save()
+    return json(res, 200, { ok: true })
+  }
+
+  if (req.url === '/api/support/history' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    if (!r) return json(res, 401, { error: 'unauthorized' })
+    const th = db.support?.[r.u.id]
+    return json(res, 200, { messages: th ? th.messages : [] })
+  }
+
   // --- admin panel (owner only) ---
   function requireAdmin(body) {
     const r = resolveUser(body)
@@ -532,9 +681,45 @@ const server = http.createServer(async (req, res) => {
     return r
   }
 
+  if (req.url === '/api/admin/support/list' && req.method === 'POST') {
+    const body = await readBody(req)
+    if (!requireAdmin(body)) return json(res, 403, { error: 'forbidden' })
+    const threads = Object.values(db.support || {}).map((th) => ({
+      userId: th.userId,
+      username: th.username,
+      unread: th.unread,
+      last: th.messages[th.messages.length - 1] || null,
+      count: th.messages.length
+    })).sort((a, b) => (b.last?.ts || 0) - (a.last?.ts || 0))
+    return json(res, 200, { threads })
+  }
+
+  if (req.url === '/api/admin/support/thread' && req.method === 'POST') {
+    const body = await readBody(req)
+    if (!requireAdmin(body)) return json(res, 403, { error: 'forbidden' })
+    const th = db.support?.[String(body.userId || '')]
+    if (!th) return json(res, 200, { messages: [] })
+    th.unread = 0 // admin opened the thread
+    save()
+    return json(res, 200, { messages: th.messages, username: th.username })
+  }
+
+  if (req.url === '/api/admin/support/reply' && req.method === 'POST') {
+    const body = await readBody(req)
+    if (!requireAdmin(body)) return json(res, 403, { error: 'forbidden' })
+    const text = String(body.text || '').trim().slice(0, 1000)
+    const th = db.support?.[String(body.userId || '')]
+    if (!th || !text) return json(res, 400, { error: 'bad request' })
+    th.messages.push({ from: 'admin', text, ts: Date.now() })
+    th.messages = th.messages.slice(-100)
+    save()
+    return json(res, 200, { ok: true })
+  }
+
   if (req.url === '/api/admin/overview' && req.method === 'POST') {
     const body = await readBody(req)
     if (!requireAdmin(body)) return json(res, 403, { error: 'forbidden' })
+    const supportUnread = Object.values(db.support || {}).reduce((a, th) => a + (th.unread || 0), 0)
     const users = Object.values(db.users).map((u) => ({
       id: u.id ?? null,
       plan: u.plan, status: u.status, expiresAt: u.expiresAt, autoRenew: u.autoRenew,
@@ -549,7 +734,8 @@ const server = http.createServer(async (req, res) => {
       paying: users.filter((u) => u.status === 'active' && u.plan !== 'free').length,
       starsCollected: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'paid').reduce((x, h) => x + h.stars, 0), 0),
       payments: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'paid').length, 0),
-      pendingCard: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'pending_card').length, 0)
+      pendingCard: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'pending_card').length, 0),
+      supportUnread
     }
     return json(res, 200, { users, accounts, totals })
   }

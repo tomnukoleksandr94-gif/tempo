@@ -135,6 +135,7 @@ export interface ServerUserState {
   history: { id: string; plan: Plan; period: string; stars: number; status: string; ts: number }[]
   referrals: { invited: number; paying: number }
   billingAvailable: boolean
+  cardPayments?: 'auto' | 'manual'
 }
 
 /** Ask the server for the authoritative subscription state. */
@@ -149,6 +150,44 @@ export async function createStarsInvoice(
   period: BillingPeriod
 ): Promise<{ link?: string; error?: string }> {
   return api('/billing/stars-invoice', { initData, plan, period })
+}
+
+/** Ask the server for a LiqPay card-checkout link (automatic card payment). */
+export async function createCardLink(
+  initData: string,
+  plan: Exclude<Plan, 'free'>,
+  period: BillingPeriod
+): Promise<{ url?: string; error?: string }> {
+  return api('/billing/card-link', { initData, plan, period })
+}
+
+// ---------- support chat ----------
+
+export interface SupportMessage { from: 'user' | 'admin'; text: string; ts: number }
+
+/** Send a message to support. */
+export async function supportSend(initData: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  return api('/support/send', { initData, text })
+}
+
+/** Fetch the user's support thread. */
+export async function supportHistory(initData: string): Promise<{ messages?: SupportMessage[]; error?: string }> {
+  return api('/support/history', { initData })
+}
+
+/** Admin: list all support threads. */
+export async function adminSupportList(initData: string): Promise<{ threads?: any[]; error?: string }> {
+  return api('/admin/support/list', { initData })
+}
+
+/** Admin: open one support thread (marks it read). */
+export async function adminSupportThread(initData: string, userId: string): Promise<{ messages?: SupportMessage[]; username?: string | null; error?: string }> {
+  return api('/admin/support/thread', { initData, userId })
+}
+
+/** Admin: reply to a user's support thread. */
+export async function adminSupportReply(initData: string, userId: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  return api('/admin/support/reply', { initData, userId, text })
 }
 
 /** Cancel auto-renewal (server-side). */

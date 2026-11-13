@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import {
   User, Languages, Coins, Sparkles, Target, LayoutGrid, Database,
   Download, Upload, Trash2, ShieldCheck, Crown
-} from 'lucide-react'
+, Headset} from 'lucide-react'
 import { Sheet, Btn, Field, Switch, SectionHeader, useToast } from '../components/ui'
 import { useStore, DEFAULT_WIDGETS } from '../lib/store'
 import { effectivePlan, aiLimitFor } from '../lib/billing'
@@ -84,13 +84,13 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
         </div>
       </div>
 
-      <Group icon={<Languages size={15} className="text-acc" />} title={t2('pr.language')}>
+      <Group icon={<Languages size={15} className="text-acc" />} title={t2('pr.general')}>
         <Row label={t2('pr.language')}>
           <div className="flex rounded-full bg-soft p-1">
             {(['ru', 'uk', 'en', 'de', 'fr'] as const).map((l) => (
               <button
                 key={l}
-                onClick={() => setSettings({ locale: l })}
+                onClick={() => setSettings({ locale: l, localeChosen: true })}
                 className={`press rounded-full px-3.5 py-1 text-[13px] font-semibold ${settings.locale === l ? 'bg-soft3 text-t1' : 'text-t2'}`}
               >
                 {{ ru: 'Рус', uk: 'Укр', en: 'Eng', de: 'De', fr: 'Fr' }[l]}
@@ -187,6 +187,14 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
 
       <SectionHeader title={t2('acc.title')} />
       <AccountSection />
+
+      <button onClick={() => go && go('support')} className="glass lift press mt-4 flex w-full items-center gap-3 p-4 text-left">
+        <Headset size={17} className="text-acc" />
+        <div>
+          <div className="text-[15px] font-bold">{t2('pr.support')}</div>
+          <div className="text-[12px] text-t3">{t2('support.subtitle')}</div>
+        </div>
+      </button>
 
       <SectionHeader title={t2('pr.subscription')} />
       <button onClick={() => go ? go('billing') : setPricing(true)} className="glass lift block w-full p-4 text-left">

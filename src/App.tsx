@@ -1,7 +1,7 @@
 import { LOCALE_TAGS } from './lib/utils'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Home as HomeIcon, Sparkles, Wallet, CalendarRange, CreditCard, UserRound
+  Home as HomeIcon, Sparkles, Wallet, CalendarRange, UserRound
 } from 'lucide-react'
 import { ToastProvider, useToast } from './components/ui'
 import { useStore, eventOccursOn } from './lib/store'
@@ -13,15 +13,16 @@ import Finance from './pages/Finance'
 import PlanningPage from './pages/Planning'
 import Profile from './pages/Profile'
 import BillingPage from './pages/Billing'
+import SupportPage from './pages/Support'
+import { SuccessOverlay } from './components/SuccessOverlay'
 
-export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'billing' | 'profile'
+export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'billing' | 'support' | 'profile'
 
 const TABS: { id: TabId; icon: ReactNode; key: string }[] = [
   { id: 'home', icon: <HomeIcon size={21} />, key: 'nav.home' },
   { id: 'ai', icon: <Sparkles size={21} />, key: 'nav.ai' },
   { id: 'finance', icon: <Wallet size={21} />, key: 'nav.finance' },
   { id: 'planning', icon: <CalendarRange size={21} />, key: 'nav.planning' },
-  { id: 'billing', icon: <CreditCard size={21} />, key: 'nav.billing' },
   { id: 'profile', icon: <UserRound size={21} />, key: 'nav.profile' }
 ]
 
@@ -170,6 +171,16 @@ function Reminders() {
 export default function App() {
   const [tab, setTab] = useState<TabId>('home')
   const themePref = useStore((s) => s.settings.theme)
+  const subscription = useStore((s) => s.subscription)
+  const [celebrate, setCelebrate] = useState(false)
+  useEffect(() => {
+    if (subscription.status === 'active' && !prevActiveRef.current) {
+      setCelebrate(true)
+      setTimeout(() => setCelebrate(false), 3800)
+    }
+    prevActiveRef.current = subscription.status === 'active'
+  }, [subscription.status])
+  const prevActiveRef = useRef(false)
   const effects = useStore((s) => s.settings.effects)
 
   // apply theme: manual preference, or auto (Telegram scheme / dark)
@@ -181,6 +192,8 @@ export default function App() {
       } catch { /* default dark */ }
     }
     document.documentElement.dataset.theme = resolved
+    const locale = useStore.getState().settings.locale
+    document.documentElement.lang = locale
     try {
       const bg = resolved === 'light' ? '#f5f5f6' : '#000000'
       tg?.setHeaderColor?.(bg)
@@ -197,17 +210,21 @@ export default function App() {
       <div className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-[1080px] md:flex-row${effects ? '' : ' no-effects'}`}>
         <Sidebar tab={tab} go={go} />
         <main className="pt-island min-w-0 flex-1 px-4 pb-nav md:px-8 md:pb-10">
-          {tab === 'home' && <HomePage go={go} />}
-          {tab === 'ai' && <Assistant />}
-          {tab === 'finance' && <Finance />}
-          {tab === 'planning' && <PlanningPage />}
-          {tab === 'billing' && <BillingPage />}
-          {tab === 'profile' && <Profile go={go} />}
+          <div key={tab} className="page-enter">
+            {tab === 'home' && <HomePage go={go} />}
+            {tab === 'ai' && <Assistant />}
+            {tab === 'finance' && <Finance />}
+            {tab === 'planning' && <PlanningPage />}
+            {tab === 'billing' && <BillingPage />}
+            {tab === 'support' && <SupportPage />}
+            {tab === 'profile' && <Profile go={go} />}
+          </div>
         </main>
         <TabBar tab={tab} go={go} />
       </div>
       <IslandBar />
       <Reminders />
+      {celebrate && <SuccessOverlay />}
     </ToastProvider>
   )
 }

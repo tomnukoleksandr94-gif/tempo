@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 
 const URL = 'http://127.0.0.1:4173'
 const browser = await chromium.launch({ headless: true, channel: 'chromium' })
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ru-RU' })
 const page = await ctx.newPage()
 const reqLog = []
 const errors = []
