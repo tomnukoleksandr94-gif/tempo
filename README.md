@@ -43,7 +43,18 @@ npm run build      # продакшн-сборка в dist/
 
 ## Telegram Mini App
 
-Бот [@Tempo00Bot](https://t.me/Tempo00Bot) → кнопка меню «Открыть Tempo».
+Бот [@Tempo00Bot](https://t.me/Tempo00Bot) → кнопка меню «Открыть Tempo ⚡».
+
+## Продакшн (актуальный адрес)
+
+**https://tempo-lifeos.pplx.app** — фронтенд + серверная часть (аккаунты, синхронизация данных, оплата Telegram Stars, админ-панель, рефералы) работает на этом адресе. Сервер `server.mjs` запускается хостингом с переменными `BOT_TOKEN`, `ADMIN_PASS`, `WEBHOOK_SECRET` (см. docs/ACCOUNTS-ADMIN.md).
+
+## Запуск сервера (self-hosting)
+
+```bash
+BOT_TOKEN=<токен бота> ADMIN_PASS=<пароль админа> WEBHOOK_SECRET=<случайная строка> PORT=3000 node server.mjs
+# webhook: https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=<адрес>/api/telegram-webhook&secret_token=<WEBHOOK_SECRET>
+```
 
 ## Документация
 

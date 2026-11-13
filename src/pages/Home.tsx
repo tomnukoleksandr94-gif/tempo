@@ -217,8 +217,7 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
     ),
     weekSpending: (
       <div className="glass p-4">
-        <div className="mb-3 flex items-baseline justify-between">
-          <span className="text-[13px] font-bold text-t2">{t2('home.weekSpending')}</span>
+        <div className="mb-3 flex items-baseline justify-end">
           <span className="tabular text-[15px] font-bold">{money(weekTotal, settings.currency, locale)}</span>
         </div>
         <Sparkline values={weekData.map((d) => d.value)} />
@@ -273,12 +272,12 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
 
       {/* quick capture */}
       <CaptureInput big busy={busy} onSubmitText={(text) => submit(text)} onSubmitImage={(b64, mime) => submit('', { b64, mime })} />
-      <p className="mt-2 px-1 text-center text-[12px] text-t3">{t2('home.captureHint')}</p>
+      <p className="mt-2 px-1 text-center text-[12px] text-t2">{t2('home.captureHint')}</p>
 
       {/* widgets */}
       {(settings.widgets ?? DEFAULT_WIDGETS).map((w, i) =>
         WIDGETS[w] ? (
-          <div key={w} className="rise" style={{ animationDelay: `${i * 60}ms` }}>
+          <div key={w} className="rise mt-6" style={{ animationDelay: `${i * 60}ms` }}>
             {w !== 'overview' && w !== 'insight' && (
               <SectionHeader
                 title={

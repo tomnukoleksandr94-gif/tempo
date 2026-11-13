@@ -76,11 +76,14 @@ export const REFERRAL_TIERS = [
 // ---------- server API (secure verification) ----------
 
 /**
- * Server base for billing. The backend lives next to the published app and
- * verifies Telegram initData (HMAC with the bot token) — the client only
- * relays its initData, never claims payments itself.
+ * Server base for billing. The backend verifies Telegram initData (HMAC with
+ * the bot token) — the client only relays its initData, never claims payments
+ * itself. '__PORT_3000__' is a deploy-time placeholder: the
+ * hosting layer rewrites it to the public proxy of this app's backend (Node
+ * server.mjs on port 3000). For self-hosting, replace it with your own server
+ * URL, e.g. 'https://your-host/api' (the server must expose /api/* routes).
  */
-export const BILLING_API = 'https://tempo-life-os.pplx.app/api'
+export const BILLING_API = '__PORT_3000__/api'
 
 async function api(path: string, body?: object, timeoutMs = 8000): Promise<any> {
   const ctrl = new AbortController()

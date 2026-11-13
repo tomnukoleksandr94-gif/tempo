@@ -21,6 +21,9 @@ import fs from 'node:fs'
 
 const BOT_TOKEN = process.env.BOT_TOKEN || ''
 const PORT = Number(process.env.PORT || 3000)
+// Shared secret for the Telegram webhook (set via setWebhook secret_token).
+// When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || ''
 const DATA_FILE = new URL('./data.json', import.meta.url).pathname
 const TG_API = (m) => `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
 
@@ -40,11 +43,12 @@ try {
 } catch { /* first run */ }
 
 // ---------- admin seed ----------
-// Admin: username "Mister", password from env ADMIN_PASS (default provided by the owner),
-// bound to Telegram @neggshka. Credentials live ONLY on the server.
+// Admin: username "Mister", password REQUIRED from env ADMIN_PASS (no default —
+// fail closed: without the env the admin account simply never exists).
+// Bound to Telegram @neggshka. Credentials live ONLY on the server.
 const ADMIN_USER = 'Mister'
-const ADMIN_PASS = process.env.ADMIN_PASS || '07121985'
-const ADMIN_TG = 'neggshka'
+const ADMIN_PASS = process.env.ADMIN_PASS || ''
+const ADMIN_TG = process.env.ADMIN_TG || 'neggshka'
 function hashPass(password, salt) {
   return crypto.scryptSync(password, salt, 32).toString('hex')
 }
@@ -55,9 +59,12 @@ function accountObj(username, password, role, tgUsername) {
     tgUsername: tgUsername || null, createdAt: Date.now(), userId: 'acc_' + crypto.randomBytes(8).toString('hex')
   }
 }
-if (!db.accounts[ADMIN_USER.toLowerCase()]) {
+if (ADMIN_PASS && !db.accounts[ADMIN_USER.toLowerCase()]) {
   db.accounts[ADMIN_USER.toLowerCase()] = accountObj(ADMIN_USER, ADMIN_PASS, 'admin', ADMIN_TG)
   fs.writeFileSync(DATA_FILE, JSON.stringify(db))
+}
+if (!ADMIN_PASS) {
+  console.warn('[tempo] ADMIN_PASS not set — admin panel is disabled (no admin account will exist)')
 }
 
 let saveTimer = null
@@ -215,6 +222,20 @@ function readBody(req) {
   })
 }
 
+// ---------- naive IP rate limit for auth endpoints (5 attempts / minute) ----------
+const authHits = new Map() // ip -> [ts, ...]
+function rateLimited(ip) {
+  const now = Date.now()
+  const hits = (authHits.get(ip) || []).filter((t) => now - t < 60_000)
+  if (hits.length >= 5) {
+    authHits.set(ip, hits)
+    return true
+  }
+  hits.push(now)
+  authHits.set(ip, hits)
+  return false
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
@@ -222,8 +243,11 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, billing: !!BOT_TOKEN })
   }
 
-  // --- Telegram webhook (server-to-server, no signature needed beyond secrecy) ---
+  // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
   if (req.url === '/api/telegram-webhook' && req.method === 'POST') {
+    if (!WEBHOOK_SECRET || req.headers['x-telegram-bot-api-secret-token'] !== WEBHOOK_SECRET) {
+      return json(res, 403, { error: 'forbidden' })
+    }
     const body = await readBody(req)
     const sp = body?.message?.successful_payment
     if (sp) {
@@ -263,6 +287,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- auth: accounts (work on any site / browser) ---
+  if ((req.url === '/api/auth/register' || req.url === '/api/auth/login') && req.method === 'POST') {
+    if (rateLimited(req.socket.remoteAddress || 'x')) return json(res, 429, { error: 'too many attempts' })
+  }
   if (req.url === '/api/auth/register' && req.method === 'POST') {
     const body = await readBody(req)
     const username = String(body.username || '').trim()
@@ -310,7 +337,9 @@ const server = http.createServer(async (req, res) => {
   const urlPath = (req.url || '/').split('?')[0]
   if (urlPath === '/api/account/data' && req.method === 'GET') {
     const url = new URL(req.url, 'http://x')
-    const token = url.searchParams.get('token')
+    // token via Authorization header (preferred) or query param (legacy)
+    const auth = String(req.headers.authorization || '')
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : url.searchParams.get('token')
     const acc = sessionAccount(token)
     if (!acc) return json(res, 401, { error: 'unauthorized' })
     return json(res, 200, { data: acc.appData || null, ts: acc.appDataTs || null })

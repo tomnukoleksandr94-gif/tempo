@@ -100,7 +100,7 @@ export async function downloadData(): Promise<{ data: string | null; error?: str
   const token = getToken()
   if (!token) return { data: null, error: 'no account' }
   try {
-    const res = await fetch(`${BILLING_API}/account/data?token=${encodeURIComponent(token)}`)
+    const res = await fetch(`${BILLING_API}/account/data`, { headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) return { data: null, error: `HTTP ${res.status}` }
     const json = await res.json()
     return { data: json.data }
