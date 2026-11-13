@@ -28,7 +28,7 @@ const WIDGETS: { id: string; key: string }[] = [
   { id: 'history', key: 'home.history' }
 ]
 
-export default function Profile() {
+export default function Profile({ go }: { go?: (t: import('../App').TabId) => void }) {
   const t2 = useT()
   const toast = useToast()
   const settings = useStore((s) => s.settings)
@@ -181,7 +181,7 @@ export default function Profile() {
       <AccountSection />
 
       <SectionHeader title={t2('pr.subscription')} />
-      <button onClick={() => setPricing(true)} className="glass lift block w-full p-4 text-left">
+      <button onClick={() => go ? go('billing') : setPricing(true)} className="glass lift block w-full p-4 text-left">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-[15px] font-bold">
             <Crown size={16} className="text-acc" />

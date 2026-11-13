@@ -126,7 +126,7 @@ export interface AdminUser {
 export interface AdminOverview {
   users: AdminUser[]
   accounts: { username: string; role: string; tgUsername: string | null; createdAt: number; hasData: boolean }[]
-  totals: { users: number; paying: number; starsCollected: number; payments: number }
+  totals: { users: number; paying: number; starsCollected: number; payments: number; pendingCard: number }
 }
 
 export async function adminOverview(): Promise<{ data?: AdminOverview; error?: string }> {

@@ -24,6 +24,8 @@ const PORT = Number(process.env.PORT || 3000)
 // Shared secret for the Telegram webhook (set via setWebhook secret_token).
 // When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || ''
+// Public URL of the Mini App (used in the bot's /start welcome button)
+const APP_URL = process.env.APP_URL || 'https://tempo-lifeos.pplx.app'
 const DATA_FILE = new URL('./data.json', import.meta.url).pathname
 const TG_API = (m) => `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
 
@@ -32,7 +34,7 @@ const STARS = {
   plus: { monthly: 250, annual: 2500 },
   pro: { monthly: 450, annual: 4500 }
 }
-const EUR = { plus: { monthly: 1.99, annual: 49.9 }, pro: { monthly: 5.99, annual: 89.9 } }
+const EUR = { plus: { monthly: 4.99, annual: 49.9 }, pro: { monthly: 8.99, annual: 89.9 } }
 
 // ---------- storage ----------
 let db = { users: {}, accounts: {}, sessions: {} }
@@ -266,13 +268,13 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true })
       }
     }
-    // /start referral deep link: ref_<code>
+    // /start (with or without a referral deep link): welcome + open-app button
     const text = body?.message?.text || ''
-    const m = text.match(/^\/start ref_(.+)$/)
+    const m = text.match(/^\/start(?:\s+ref_(.+))?$/)
     if (m) {
       const inviteeId = String(body?.message?.from?.id)
       const inviterId = m[1]
-      if (inviteeId && inviterId !== inviteeId) {
+      if (inviterId && inviteeId && inviterId !== inviteeId) {
         const inviter = user(inviterId)
         const invitee = user(inviteeId)
         if (invitee.referredBy === null && !inviter.blocked) {
@@ -280,6 +282,22 @@ const server = http.createServer(async (req, res) => {
           inviter.referrals.invited += 1
           save()
         }
+      }
+      // reply with a welcome message and a button that opens the Mini App
+      if (BOT_TOKEN && body?.message?.chat?.id) {
+        fetch(TG_API('sendMessage'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: body.message.chat.id,
+            text: 'Tempo — AI Life OS ⚡\nФинансы, календарь, задачи и питание в одном интерфейсе.\n\nОдно сообщение — и ИИ разложит всё по разделам:\n«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00»',
+            reply_markup: {
+              inline_keyboard: [[
+                { text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }
+              ]]
+            }
+          })
+        }).catch(() => { /* best effort */ })
       }
       return json(res, 200, { ok: true })
     }
@@ -377,6 +395,21 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { link: inv.result })
   }
 
+  // card transfer: the user reports they paid by bank card; the owner verifies
+  // the incoming transfer and activates the plan manually (admin grant)
+  if (req.url === '/api/billing/card-request' && req.method === 'POST') {
+    const body = await readBody(req)
+    const r = resolveUser(body)
+    if (!r) return json(res, 401, { error: 'unauthorized' })
+    if (!STARS[body.plan]) return json(res, 400, { error: 'bad plan' })
+    const period = body.period === 'annual' ? 'annual' : 'monthly'
+    const u = r.u
+    u.history.unshift({ id: 'card_' + Date.now(), plan: body.plan, period, stars: 0, status: 'pending_card', ts: Date.now() })
+    u.history = u.history.slice(0, 50)
+    save()
+    return json(res, 200, { ok: true })
+  }
+
   if (req.url === '/api/billing/cancel' && req.method === 'POST') {
     const body = await readBody(req)
     const r = resolveUser(body)
@@ -409,7 +442,8 @@ const server = http.createServer(async (req, res) => {
       users: users.length,
       paying: users.filter((u) => u.status === 'active' && u.plan !== 'free').length,
       starsCollected: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'paid').reduce((x, h) => x + h.stars, 0), 0),
-      payments: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'paid').length, 0)
+      payments: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'paid').length, 0),
+      pendingCard: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'pending_card').length, 0)
     }
     return json(res, 200, { users, accounts, totals })
   }

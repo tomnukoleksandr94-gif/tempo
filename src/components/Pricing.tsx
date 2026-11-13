@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Check, Crown, Info, XCircle } from 'lucide-react'
+import { Check, Copy, CreditCard, Crown, Sparkles, XCircle } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { useT } from '../lib/hooks'
-import { tg, isTelegram, haptic } from '../lib/telegram'
+import { useToast } from './ui'
+import { tg, haptic } from '../lib/telegram'
 import {
-  PLANS, PLAN_ORDER, planPrice, launchDiscountActive, LAUNCH_DISCOUNT_UNTIL,
+  PLANS, PLAN_ORDER, planPrice, CARD_PAY, submitCardRequest,
   effectivePlan, fetchUserState, createStarsInvoice, cancelSubscription
 } from '../lib/billing'
 import type { BillingPeriod, Plan } from '../lib/types'
@@ -12,29 +13,36 @@ import { Btn } from './ui'
 
 /**
  * Honest pricing UI:
- * - prices show the launch discount with an explicit label and expiry date;
- * - payment only via Telegram Stars through the server (server verifies initData
- *   and activates the subscription via the Telegram webhook);
+ * - two payment methods: Telegram Stars (automatic, via the server) and bank
+ *   card transfer (manual — the app shows the recipient card, the user pays from
+ *   their own banking app and taps "I paid"; the owner activates after checking);
+ * - no card data of the payer is ever collected;
  * - if the billing server is unreachable, it says so — no fake activations.
  */
 export function PricingSheet({ onClose }: { onClose?: () => void }) {
   const t2 = useT()
+  const toast = useToast()
   const subscription = useStore((s) => s.subscription)
   const syncSubscription = useStore((s) => s.syncSubscription)
   const [period, setPeriod] = useState<BillingPeriod>('monthly')
   const [busy, setBusy] = useState<Plan | null>(null)
   const [serverOk, setServerOk] = useState<boolean | null>(null)
-  const discount = launchDiscountActive()
+  const [method, setMethod] = useState<'stars' | 'card'>('stars')
+  const [cardPlan, setCardPlan] = useState<Exclude<Plan, 'free'> | null>(null)
+  const [cardSent, setCardSent] = useState(false)
 
-  // fetch authoritative state from the server (only makes sense in Telegram)
+  // fetch authoritative state from the server (Telegram initData or account token)
   useEffect(() => {
     let cancelled = false
     async function load() {
-      if (!isTelegram || !tg?.initData) {
+      const initData = tg?.initData || ''
+      let hasAccount = false
+      try { hasAccount = !!localStorage.getItem('tempo-account-token') } catch { /* ignore */ }
+      if (!initData && !hasAccount) {
         setServerOk(false)
         return
       }
-      const res = await fetchUserState(tg.initData)
+      const res = await fetchUserState(initData)
       if (cancelled) return
       if ('error' in res) {
         setServerOk(false)
@@ -58,7 +66,7 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
   const current = effectivePlan(subscription)
 
   async function pay(plan: Exclude<Plan, 'free'>) {
-    if (!isTelegram || !tg?.initData || !serverOk) return
+    if (!serverOk || !tg?.initData) return // Stars checkout exists only inside Telegram
     setBusy(plan)
     haptic('medium')
     const res = await createStarsInvoice(tg.initData, plan, period)
@@ -79,6 +87,29 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
     setBusy(null)
   }
 
+  async function cardRequest(plan: Exclude<Plan, 'free'>) {
+    setBusy(plan)
+    haptic('medium')
+    const res = await submitCardRequest(tg?.initData || '', plan, period)
+    if (res?.ok) {
+      setCardSent(true)
+      toast(t2('plan.cardSent'), 'ok')
+    } else {
+      haptic('error')
+      toast(t2('plan.cardFail'), 'err')
+    }
+    setBusy(null)
+  }
+
+  const copyCard = async () => {
+    try {
+      await navigator.clipboard.writeText(CARD_PAY.number.replace(/\s/g, ''))
+      toast(t2('plan.cardCopied'), 'ok')
+    } catch {
+      toast(CARD_PAY.number, 'info')
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {/* period toggle */}
@@ -96,11 +127,69 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
         ))}
       </div>
 
-      {/* launch discount label */}
-      {discount && period === 'monthly' && (
-        <div className="flex items-center gap-2 rounded-2xl bg-accent-soft px-3.5 py-2.5 text-[12px] font-semibold text-acc2">
-          <Info size={14} className="shrink-0" />
-          {t2('plan.discount')}
+      {/* payment method toggle */}
+      {cardPlan === null && (
+        <div className="glass-sm flex items-center gap-1 p-1">
+          <button
+            onClick={() => setMethod('stars')}
+            className={`press flex flex-1 items-center justify-center gap-1.5 rounded-[11px] py-2 text-[13px] font-semibold transition-colors ${
+              method === 'stars' ? 'bg-soft3 text-t1' : 'text-t2'
+            }`}
+          >
+            <Sparkles size={14} className={method === 'stars' ? 'text-acc' : ''} />
+            {t2('plan.payStars')}
+          </button>
+          <button
+            onClick={() => setMethod('card')}
+            className={`press flex flex-1 items-center justify-center gap-1.5 rounded-[11px] py-2 text-[13px] font-semibold transition-colors ${
+              method === 'card' ? 'bg-soft3 text-t1' : 'text-t2'
+            }`}
+          >
+            <CreditCard size={14} className={method === 'card' ? 'text-acc' : ''} />
+            {t2('plan.payCard')}
+          </button>
+        </div>
+      )}
+
+      {/* card transfer view */}
+      {cardPlan !== null && (
+        <div className="glass-sm flex flex-col gap-3 p-4">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[15px] font-bold">
+              <CreditCard size={15} className="text-acc" />
+              {t2('plan.cardTitle')}
+            </span>
+            <button className="press text-[13px] font-semibold text-t2" onClick={() => { setCardPlan(null); setCardSent(false) }}>
+              {t2('c.back')}
+            </button>
+          </div>
+
+          <div className="rounded-2xl bg-soft p-3.5">
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-t3">{t2('plan.cardNumber')}</div>
+            <button onClick={copyCard} className="press flex w-full items-center justify-between gap-2">
+              <span className="tabular text-[19px] font-extrabold tracking-wide">{CARD_PAY.number}</span>
+              <Copy size={16} className="shrink-0 text-acc" />
+            </button>
+          </div>
+
+          <div className="flex items-baseline justify-between text-[13px]">
+            <span className="text-t2">{t2('plan.cardAmount')}</span>
+            <span className="tabular text-[15px] font-bold">
+              €{planPrice(cardPlan, period).toFixed(2)} · {t2(`plan.${cardPlan}`)} · {t2(period === 'monthly' ? 'plan.monthly' : 'plan.annualBtn')}
+            </span>
+          </div>
+
+          <p className="text-[12px] leading-relaxed text-t2">{t2('plan.cardHow')}</p>
+
+          {cardSent ? (
+            <div className="rounded-2xl bg-accent-soft px-3.5 py-3 text-[13px] font-semibold text-acc2">
+              {t2('plan.cardSentNote')}
+            </div>
+          ) : (
+            <Btn className="w-full" variant="primary" disabled={busy !== null || !serverOk} onClick={() => cardRequest(cardPlan)}>
+              {t2('plan.iPaid')}
+            </Btn>
+          )}
         </div>
       )}
 
@@ -133,11 +222,6 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
               <span className="text-[12px] text-t3">
                 {t2(period === 'monthly' ? 'plan.perMonth' : 'plan.perYear')}
               </span>
-              {p !== 'free' && discount && period === 'monthly' && (
-                <span className="tabular text-[12px] text-t3 line-through">
-                  €{def.monthly.toFixed(2)}
-                </span>
-              )}
             </div>
 
             <ul className="mb-3 space-y-1.5">
@@ -156,17 +240,21 @@ export function PricingSheet({ onClose }: { onClose?: () => void }) {
               <Btn
                 className="w-full"
                 variant={isCurrent ? 'ghost' : 'primary'}
-                disabled={isCurrent || !serverOk || busy !== null}
-                onClick={() => pay(p)}
+                disabled={isCurrent || !serverOk || busy !== null || (method === 'stars' && !tg?.initData)}
+                onClick={() => (method === 'card' ? setCardPlan(p) : pay(p))}
               >
-                {isCurrent ? t2('plan.current') : `${t2('plan.starsPay')} · ${period === 'monthly' ? def.starsMonthly : def.starsAnnual} ⭐`}
+                {isCurrent
+                  ? t2('plan.current')
+                  : method === 'card'
+                    ? t2('plan.payCardBtn')
+                    : `${t2('plan.starsPay')} · ${period === 'monthly' ? def.starsMonthly : def.starsAnnual} ⭐`}
               </Btn>
             )}
           </div>
         )
       })}
 
-      <p className="px-1 text-[11px] leading-relaxed text-t3">{t2('plan.starsNote')}</p>
+      <p className="px-1 text-[11px] leading-relaxed text-t3">{t2(method === 'card' ? 'plan.cardNote' : 'plan.starsNote')}</p>
 
       {/* honest unavailability */}
       {serverOk === false && (

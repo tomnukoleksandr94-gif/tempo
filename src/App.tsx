@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Home as HomeIcon, Sparkles, Wallet, CalendarRange, UserRound
+  Home as HomeIcon, Sparkles, Wallet, CalendarRange, CreditCard, UserRound
 } from 'lucide-react'
 import { ToastProvider, useToast } from './components/ui'
 import { useStore, eventOccursOn } from './lib/store'
@@ -11,14 +11,16 @@ import Assistant from './pages/Assistant'
 import Finance from './pages/Finance'
 import PlanningPage from './pages/Planning'
 import Profile from './pages/Profile'
+import BillingPage from './pages/Billing'
 
-export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'profile'
+export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'billing' | 'profile'
 
 const TABS: { id: TabId; icon: ReactNode; key: string }[] = [
   { id: 'home', icon: <HomeIcon size={21} />, key: 'nav.home' },
   { id: 'ai', icon: <Sparkles size={21} />, key: 'nav.ai' },
   { id: 'finance', icon: <Wallet size={21} />, key: 'nav.finance' },
   { id: 'planning', icon: <CalendarRange size={21} />, key: 'nav.planning' },
+  { id: 'billing', icon: <CreditCard size={21} />, key: 'nav.billing' },
   { id: 'profile', icon: <UserRound size={21} />, key: 'nav.profile' }
 ]
 
@@ -195,7 +197,8 @@ export default function App() {
           {tab === 'ai' && <Assistant />}
           {tab === 'finance' && <Finance />}
           {tab === 'planning' && <PlanningPage />}
-          {tab === 'profile' && <Profile />}
+          {tab === 'billing' && <BillingPage />}
+          {tab === 'profile' && <Profile go={go} />}
         </main>
         <TabBar tab={tab} go={go} />
       </div>

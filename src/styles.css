@@ -108,19 +108,23 @@ canvas {
   max-width: 100%;
 }
 
-input,
-button,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
-}
+/* element resets live in the base layer so Tailwind utilities (bg-acc,
+   text-black, bg-soft, …) can override them — unlayered rules would win */
+@layer base {
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
 
-button {
-  cursor: pointer;
-  background: none;
-  border: none;
-  -webkit-tap-highlight-color: transparent;
+  button {
+    cursor: pointer;
+    background: none;
+    border: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 h1,

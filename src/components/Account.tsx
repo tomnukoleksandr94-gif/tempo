@@ -128,7 +128,7 @@ function AdminPanel() {
       </div>
 
       {data && (
-        <div className="grid grid-cols-3 gap-2 p-4">
+        <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
           <div className="rounded-xl bg-soft p-2.5 text-center">
             <Users2 size={14} className="mx-auto mb-1 text-acc" />
             <div className="tabular text-[17px] font-bold">{data.totals.users}</div>
@@ -143,6 +143,11 @@ function AdminPanel() {
             <CreditCard size={14} className="mx-auto mb-1 text-acc" />
             <div className="tabular text-[17px] font-bold">{data.totals.payments}</div>
             <div className="text-[10px] text-t3">{t2('admin.payments')}</div>
+          </div>
+          <div className={`rounded-xl p-2.5 text-center ${data.totals.pendingCard ? 'bg-accent-soft' : 'bg-soft'}`}>
+            <CreditCard size={14} className="mx-auto mb-1 text-acc" />
+            <div className="tabular text-[17px] font-bold">{data.totals.pendingCard}</div>
+            <div className="text-[10px] text-t3">{t2('admin.pendingCard')}</div>
           </div>
         </div>
       )}
@@ -208,7 +213,8 @@ function AdminPanel() {
                 <div className="mt-1.5 space-y-0.5">
                   {u.history.slice(0, 3).map((h) => (
                     <div key={h.id} className="tabular text-[10px] text-t3">
-                      {new Date(h.ts).toLocaleDateString()} · {h.plan} · {h.period === 'annual' ? t2('plan.annualBtn') : t2('plan.monthly')} · {h.stars} ⭐{h.note ? ' · ' + h.note : ''}
+                      {new Date(h.ts).toLocaleDateString()} · {h.plan} · {h.period === 'annual' ? t2('plan.annualBtn') : t2('plan.monthly')} ·{' '}
+                      {h.status === 'pending_card' ? `⏳ ${t2('admin.cardPending')}` : `${h.stars} ⭐`}{h.note ? ' · ' + h.note : ''}
                     </div>
                   ))}
                 </div>

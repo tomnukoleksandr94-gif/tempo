@@ -12,15 +12,6 @@
 
 import type { BillingPeriod, Plan, Subscription } from './types'
 
-// ---------- launch discount ----------
-// −3 € on monthly plans, valid until 2026-12-01. Displayed explicitly in the UI.
-export const LAUNCH_DISCOUNT = 3
-export const LAUNCH_DISCOUNT_UNTIL = '2026-12-01'
-
-export function launchDiscountActive(now = new Date()): boolean {
-  return now.getTime() < new Date(`${LAUNCH_DISCOUNT_UNTIL}T23:59:59`).getTime()
-}
-
 // ---------- plans ----------
 
 export interface PlanDef {
@@ -45,12 +36,10 @@ export const PLANS: Record<Plan, PlanDef> = {
 
 export const PLAN_ORDER: Plan[] = ['free', 'plus', 'pro']
 
-/** Display price of a plan for a period, including launch discount when active. */
-export function planPrice(plan: Plan, period: BillingPeriod, now = new Date()): number {
-  const base = period === 'monthly' ? PLANS[plan].monthly : PLANS[plan].annual
+/** Display price of a plan for a period. */
+export function planPrice(plan: Plan, period: BillingPeriod): number {
   if (plan === 'free') return 0
-  if (period === 'monthly' && launchDiscountActive(now)) return Math.max(0, base - LAUNCH_DISCOUNT)
-  return base
+  return period === 'monthly' ? PLANS[plan].monthly : PLANS[plan].annual
 }
 
 /** Daily AI action limit for the active plan. */
@@ -73,6 +62,25 @@ export const REFERRAL_TIERS = [
   { count: 5, reward: 'pro_month' as const }
 ]
 
+// ---------- card transfer (manual, owner-verified) ----------
+// Bank-card payment: the app shows the recipient card, the user transfers the
+// amount from their own banking app, then taps "I paid" — the request is logged
+// on the server and the owner activates the subscription after verifying the
+// transfer (admin panel). No card data of the payer is ever collected.
+export const CARD_PAY = {
+  number: '4441 1110 0576 3481',
+  holder: 'Tempo'
+}
+
+/** Report a card transfer so the owner can verify and activate the plan. */
+export async function submitCardRequest(
+  initData: string,
+  plan: Exclude<Plan, 'free'>,
+  period: BillingPeriod
+): Promise<{ ok?: boolean; error?: string }> {
+  return api('/billing/card-request', { initData, plan, period })
+}
+
 // ---------- server API (secure verification) ----------
 
 /**
@@ -83,7 +91,15 @@ export const REFERRAL_TIERS = [
  * server.mjs on port 3000). For self-hosting, replace it with your own server
  * URL, e.g. 'https://your-host/api' (the server must expose /api/* routes).
  */
-export const BILLING_API = '__PORT_3000__/api'
+export const BILLING_API = (() => {
+  const base = '__PORT_3000__/api'
+  // The deploy rewrites the placeholder to the public backend proxy. In local
+  // dev it stays literal — fall back to the local server on the same host.
+  if (base.startsWith('__PORT')) {
+    try { return `http://${location.hostname}:3000/api` } catch { return base }
+  }
+  return base
+})()
 
 async function api(path: string, body?: object, timeoutMs = 8000): Promise<any> {
   const ctrl = new AbortController()
