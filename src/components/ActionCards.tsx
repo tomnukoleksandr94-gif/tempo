@@ -182,7 +182,7 @@ function ActionCard({ item, onUpdate, onRemove }: { item: Validated; onUpdate: (
           </Field>
           <div className="flex flex-col gap-1.5">
             {a.items.map((it, j) => (
-              <div key={j} className="flex items-center justify-between rounded-xl bg-white/4 px-3 py-2">
+              <div key={j} className="flex items-center justify-between rounded-xl bg-soft px-3 py-2">
                 <span className="min-w-0 flex-1 truncate text-[13px]">{it.name}</span>
                 <span className="tabular shrink-0 text-[13px] font-semibold text-t2">
                   ≈{Math.round(it.kcal)} kcal

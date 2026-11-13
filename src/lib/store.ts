@@ -2,14 +2,15 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
   AiAction, CaptureRecord, ChatMessage, Currency, CustomFood, EventItem, Meal,
-  Settings, Task, Transaction
+  Settings, Subscription, Task, Transaction, ReferralStats, Plan
 } from './types'
 import { uid, todayISO, addDays, parseISODate, monthKey, startOfWeekISO } from './utils'
 import { localStore, cloudStore, storageAvailable } from './storage'
 import type { Validated } from './validate'
+import { aiLimitFor } from './billing'
+import type { PlanningTab } from '../pages/Planning'
 
-export const PLAN_LIMITS = { free: 20, pro: 100, premium: 300 } as const
-export type Plan = keyof typeof PLAN_LIMITS
+export type { Plan }
 
 export const DATA_KEY = 'tempo-data-v1'
 
@@ -23,13 +24,28 @@ const initialSettings: Settings = {
   apiKey: '',
   kcalTarget: 2200,
   widgets: DEFAULT_WIDGETS,
-  autoConfirm: false
+  autoConfirm: false,
+  theme: 'dark'
 }
+
+/** Free until a payment is verified server-side. Never set locally. */
+export const freeSubscription = (): Subscription => ({
+  plan: 'free',
+  period: null,
+  expiresAt: null,
+  status: 'none',
+  autoRenew: false,
+  history: []
+})
 
 interface AppData {
   version: 1
   updatedAt: number
-  settings: Settings & { plan: Plan }
+  settings: Settings
+  subscription: Subscription
+  referralCode: string
+  referral: ReferralStats
+  planningTab: PlanningTab
   transactions: Transaction[]
   tasks: Task[]
   events: EventItem[]
@@ -45,7 +61,11 @@ interface AppData {
 const initialData = (): AppData => ({
   version: 1,
   updatedAt: Date.now(),
-  settings: { ...initialSettings, plan: 'free' },
+  settings: { ...initialSettings },
+  subscription: freeSubscription(),
+  referralCode: uid().slice(0, 8),
+  referral: { invited: 0, paying: 0, claimed: [] },
+  planningTab: 'calendar',
   transactions: [],
   tasks: [],
   events: [],
@@ -157,6 +177,10 @@ interface Store extends AppData {
   pushCapture(rec: CaptureRecord): void
   updateCapture(id: string, patch: Partial<CaptureRecord>): void
   bumpAiUsage(): { ok: boolean; count: number; limit: number }
+  aiLeftToday(): number
+  setPlanningTab(tab: PlanningTab): void
+  syncSubscription(sub: Partial<Subscription>): void
+  setReferral(stats: Partial<ReferralStats>): void
   setInsight(text: string): void
   applyActions(list: Validated[]): { applied: string[]; skipped: number }
   // data
@@ -270,10 +294,30 @@ export const useStore = create<Store>()(
         const s = get()
         const today = todayISO()
         const count = s.aiUsage.date === today ? s.aiUsage.count : 0
-        const limit = PLAN_LIMITS[s.settings.plan] ?? PLAN_LIMITS.free
+        const limit = aiLimitFor(s.subscription)
         if (count >= limit) return { ok: false, count, limit }
         set({ aiUsage: { date: today, count: count + 1 } })
         return { ok: true, count: count + 1, limit }
+      },
+
+      aiLeftToday() {
+        const s = get()
+        const today = todayISO()
+        const count = s.aiUsage.date === today ? s.aiUsage.count : 0
+        return Math.max(0, aiLimitFor(s.subscription) - count)
+      },
+
+      setPlanningTab(tab) {
+        set({ planningTab: tab })
+      },
+
+      /** mirror server-verified subscription state locally */
+      syncSubscription(sub) {
+        set((s) => ({ subscription: { ...s.subscription, ...sub }, updatedAt: Date.now() }))
+      },
+
+      setReferral(stats) {
+        set((s) => ({ referral: { ...s.referral, ...stats }, updatedAt: Date.now() }))
       },
 
       setInsight(text) {
@@ -403,11 +447,35 @@ export const useStore = create<Store>()(
     }),
     {
       name: DATA_KEY,
-      version: 1,
+      version: 2,
+      merge: (persisted, current) => {
+        const p = (persisted || {}) as Partial<AppData>
+        return {
+          ...current,
+          ...p,
+          settings: { ...current.settings, ...(p.settings || {}) },
+          subscription: { ...current.subscription, ...(p.subscription as object) },
+          referral: { ...current.referral, ...(p.referral as object) }
+        }
+      },
       storage: createJSONStorage(() => localStore),
       partialize: (s) => {
-        const { version, updatedAt, settings, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } = s as any
-        return { version, updatedAt, settings, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures }
+        const { version, updatedAt, settings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } = s as any
+        return { version, updatedAt, settings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures }
+      },
+      migrate: (persisted: any) => {
+        // v1 had settings.plan with fake values (free/pro/premium) and no
+        // server-verified subscription — reset to honest free state.
+        if (persisted?.state?.settings?.plan != null) {
+          delete persisted.state.settings.plan
+          persisted.state.subscription = freeSubscription()
+        }
+        persisted.state.settings = { ...initialSettings, ...(persisted.state.settings || {}) }
+        persisted.state.subscription = persisted.state.subscription || freeSubscription()
+        persisted.state.referralCode = persisted.state.referralCode || uid().slice(0, 8)
+        persisted.state.referral = persisted.state.referral || { invited: 0, paying: 0, claimed: [] }
+        persisted.state.planningTab = 'calendar'
+        return persisted
       }
     }
   )
@@ -439,10 +507,10 @@ export function initCloudSync() {
     if (!cloudStore.available()) return
     if (cloudTimer) clearTimeout(cloudTimer)
     cloudTimer = setTimeout(() => {
-      const { version, updatedAt, settings, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } = useStore.getState() as any
+      const { version, updatedAt, settings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } = useStore.getState() as any
       cloudStore.set(
         DATA_KEY,
-        JSON.stringify({ state: { version, updatedAt, settings, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } })
+        JSON.stringify({ state: { version, updatedAt, settings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } })
       )
     }, 2000)
   })
@@ -482,10 +550,15 @@ export function monthTotals(transactions: Transaction[], today: string) {
   return { exp: Math.round(exp * 100) / 100, inc: Math.round(inc * 100) / 100 }
 }
 
-export function expensesByCategory(transactions: Transaction[], from: string, to: string) {
+export function expensesByCategory(
+  transactions: Transaction[],
+  from: string,
+  to: string,
+  kind: 'expense' | 'income' = 'expense'
+) {
   const map = new Map<string, number>()
   for (const t of transactions) {
-    if (t.kind !== 'expense' || t.date < from || t.date > to) continue
+    if (t.kind !== kind || t.date < from || t.date > to) continue
     map.set(t.category, (map.get(t.category) || 0) + t.amount)
   }
   return [...map.entries()]

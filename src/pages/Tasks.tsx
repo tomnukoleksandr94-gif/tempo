@@ -85,7 +85,7 @@ export default function TasksPage() {
           toggleTask(x.id)
         }}
         className={`press flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-full border-2 ${
-          x.done ? 'check-pop border-acc bg-acc' : 'border-white/25 hover:border-acc'
+          x.done ? 'check-pop border-acc bg-acc' : 'bd-soft2 hover:border-acc'
         }`}
       >
         {x.done && <Check size={14} className="text-black" strokeWidth={3} />}
@@ -136,7 +136,7 @@ export default function TasksPage() {
         <button
           onClick={quickAdd}
           disabled={!quick.trim()}
-          className={`press flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${quick.trim() ? 'bg-acc text-black' : 'bg-white/8 text-t3'}`}
+          className={`press flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${quick.trim() ? 'bg-acc text-black' : 'bg-soft2 text-t3'}`}
         >
           <Plus size={17} strokeWidth={2.5} />
         </button>
@@ -248,7 +248,7 @@ export default function TasksPage() {
                   key={opt.label}
                   onClick={() => setSheet({ ...sheet, due: opt.d })}
                   className={`press rounded-full border px-3 py-1.5 text-[12px] font-semibold ${
-                    sheet.due === opt.d ? 'border-acc bg-accent-soft text-acc2' : 'border-white/10 bg-white/4 text-t2'
+                    sheet.due === opt.d ? 'border-acc bg-accent-soft text-acc2' : 'bd-soft bg-soft text-t2'
                   }`}
                 >
                   {opt.label}
@@ -274,7 +274,7 @@ function TaskList({ list, row }: { list: Task[]; row: (props: { x: Task; dim?: b
   return (
     <>
       {list.map((x, i) => (
-        <div key={x.id} className={i > 0 ? 'border-t border-white/6' : ''}>
+        <div key={x.id} className={i > 0 ? 'border-t bd-soft' : ''}>
           {row({ x })}
         </div>
       ))}

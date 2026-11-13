@@ -1,28 +1,24 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Home as HomeIcon, Sparkles, Wallet, CalendarDays, SquareCheck, UtensilsCrossed, UserRound
+  Home as HomeIcon, Sparkles, Wallet, CalendarRange, UserRound
 } from 'lucide-react'
 import { ToastProvider, useToast } from './components/ui'
 import { useStore, eventOccursOn } from './lib/store'
 import { t } from './lib/i18n'
-import { haptic } from './lib/telegram'
+import { haptic, tg, isTelegram } from './lib/telegram'
 import HomePage from './pages/Home'
 import Assistant from './pages/Assistant'
 import Finance from './pages/Finance'
-import CalendarPage from './pages/Calendar'
-import TasksPage from './pages/Tasks'
-import Nutrition from './pages/Nutrition'
+import PlanningPage from './pages/Planning'
 import Profile from './pages/Profile'
 
-export type TabId = 'home' | 'ai' | 'finance' | 'calendar' | 'tasks' | 'nutrition' | 'profile'
+export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'profile'
 
 const TABS: { id: TabId; icon: ReactNode; key: string }[] = [
   { id: 'home', icon: <HomeIcon size={21} />, key: 'nav.home' },
   { id: 'ai', icon: <Sparkles size={21} />, key: 'nav.ai' },
   { id: 'finance', icon: <Wallet size={21} />, key: 'nav.finance' },
-  { id: 'calendar', icon: <CalendarDays size={21} />, key: 'nav.calendar' },
-  { id: 'tasks', icon: <SquareCheck size={21} />, key: 'nav.tasks' },
-  { id: 'nutrition', icon: <UtensilsCrossed size={21} />, key: 'nav.nutrition' },
+  { id: 'planning', icon: <CalendarRange size={21} />, key: 'nav.planning' },
   { id: 'profile', icon: <UserRound size={21} />, key: 'nav.profile' }
 ]
 
@@ -68,7 +64,7 @@ function IslandBar() {
       <div className="glass-sm flex h-9 items-center gap-2.5 rounded-full px-4 !py-0 shadow-lg">
         <LogoMark size={17} />
         <span className="tabular text-[13px] font-bold">{time}</span>
-        <span className="h-3.5 w-px bg-white/15" />
+        <span className="h-3.5 w-px bg-soft3" />
         <span className="text-[12px] font-medium text-t2 capitalize">{date}</span>
       </div>
     </div>
@@ -102,7 +98,7 @@ function TabBar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
 // ---------- sidebar (desktop) ----------
 function Sidebar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col border-r border-white/8 px-4 py-6 md:flex" aria-label="main">
+    <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col border-r bd-soft px-4 py-6 md:flex" aria-label="main">
       <div className="mb-8 flex items-center gap-2.5 px-2">
         <LogoMark size={30} />
         <span className="text-[22px] font-extrabold tracking-tight">tempo</span>
@@ -116,7 +112,7 @@ function Sidebar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
               go(tb.id)
             }}
             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
-              tab === tb.id ? 'bg-white/10 text-t1' : 'text-t2 hover:bg-white/5'
+              tab === tb.id ? 'bg-soft2 text-t1' : 'text-t2 hover:bg-soft'
             }`}
           >
             <span style={{ color: tab === tb.id ? 'var(--accent)' : undefined }}>{tb.icon}</span>
@@ -168,6 +164,24 @@ function Reminders() {
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('home')
+  const themePref = useStore((s) => s.settings.theme)
+
+  // apply theme: manual preference, or auto (Telegram scheme / dark)
+  useEffect(() => {
+    let resolved: 'dark' | 'light' = themePref === 'light' ? 'light' : themePref === 'dark' ? 'dark' : 'dark'
+    if (themePref === 'auto') {
+      try {
+        resolved = tg?.colorScheme === 'light' ? 'light' : 'dark'
+      } catch { /* default dark */ }
+    }
+    document.documentElement.dataset.theme = resolved
+    try {
+      const bg = resolved === 'light' ? '#f5f5f6' : '#000000'
+      tg?.setHeaderColor?.(bg)
+      tg?.setBackgroundColor?.(bg)
+    } catch { /* not in Telegram */ }
+  }, [themePref])
+
   const go = (t: TabId) => {
     setTab(t)
     window.scrollTo({ top: 0 })
@@ -180,9 +194,7 @@ export default function App() {
           {tab === 'home' && <HomePage go={go} />}
           {tab === 'ai' && <Assistant />}
           {tab === 'finance' && <Finance />}
-          {tab === 'calendar' && <CalendarPage />}
-          {tab === 'tasks' && <TasksPage />}
-          {tab === 'nutrition' && <Nutrition />}
+          {tab === 'planning' && <PlanningPage />}
           {tab === 'profile' && <Profile />}
         </main>
         <TabBar tab={tab} go={go} />

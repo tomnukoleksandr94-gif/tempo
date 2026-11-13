@@ -1,10 +1,14 @@
 import { useRef, useState } from 'react'
 import {
   User, Languages, Coins, Sparkles, Target, LayoutGrid, Database,
-  Download, Upload, Trash2, ShieldCheck, Crown, Info
+  Download, Upload, Trash2, ShieldCheck, Crown
 } from 'lucide-react'
 import { Sheet, Btn, Field, Switch, SectionHeader, useToast } from '../components/ui'
-import { useStore, PLAN_LIMITS, DEFAULT_WIDGETS } from '../lib/store'
+import { useStore, DEFAULT_WIDGETS } from '../lib/store'
+import { effectivePlan, aiLimitFor } from '../lib/billing'
+import { PricingSheet } from '../components/Pricing'
+import { ReferralBlock } from '../components/Referral'
+import { AccountSection } from '../components/Account'
 import { useT } from '../lib/hooks'
 import { MODELS } from '../lib/ai'
 import { t } from '../lib/i18n'
@@ -37,12 +41,14 @@ export default function Profile() {
   const [pricing, setPricing] = useState(false)
   const [clearSheet, setClearSheet] = useState(false)
 
+  const subscription = useStore((s) => s.subscription)
   const usedToday = usage.date === new Date().toISOString().slice(0, 10) ? usage.count : 0
-  const limit = PLAN_LIMITS[settings.plan] ?? PLAN_LIMITS.free
+  const limit = aiLimitFor(subscription)
+  const currentPlan = effectivePlan(subscription)
 
   const Group = ({ icon, title, children }: { icon: any; title: string; children: any }) => (
     <div className="glass overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
+      <div className="flex items-center gap-2 border-b bd-soft px-4 py-3">
         {icon}
         <span className="text-[13px] font-bold text-t2">{title}</span>
       </div>
@@ -51,7 +57,7 @@ export default function Profile() {
   )
 
   const Row = ({ label, children }: { label: string; children: any }) => (
-    <div className="flex items-center justify-between gap-4 border-b border-white/6 px-4 py-3 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b bd-soft px-4 py-3 last:border-0">
       <span className="shrink-0 text-[14px]">{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
@@ -80,12 +86,12 @@ export default function Profile() {
 
       <Group icon={<Languages size={15} className="text-acc" />} title={t2('pr.language')}>
         <Row label={t2('pr.language')}>
-          <div className="flex rounded-full bg-white/6 p-1">
+          <div className="flex rounded-full bg-soft p-1">
             {(['ru', 'en'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setSettings({ locale: l })}
-                className={`press rounded-full px-3.5 py-1 text-[13px] font-semibold ${settings.locale === l ? 'bg-white/14 text-t1' : 'text-t2'}`}
+                className={`press rounded-full px-3.5 py-1 text-[13px] font-semibold ${settings.locale === l ? 'bg-soft3 text-t1' : 'text-t2'}`}
               >
                 {l === 'ru' ? 'Русский' : 'English'}
               </button>
@@ -98,6 +104,19 @@ export default function Profile() {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+        </Row>
+        <Row label={t2('pr.theme')}>
+          <div className="flex rounded-full bg-soft p-1">
+            {(['auto', 'dark', 'light'] as const).map((th) => (
+              <button
+                key={th}
+                onClick={() => setSettings({ theme: th })}
+                className={`press rounded-full px-3 py-1 text-[12px] font-semibold ${settings.theme === th ? 'bg-soft3 text-t1' : 'text-t2'}`}
+              >
+                {t2(`pr.theme${th === 'auto' ? 'Auto' : th === 'dark' ? 'Dark' : 'Light'}`)}
+              </button>
+            ))}
+          </div>
         </Row>
       </Group>
 
@@ -158,19 +177,30 @@ export default function Profile() {
         ))}
       </Group>
 
+      <SectionHeader title={t2('acc.title')} />
+      <AccountSection />
+
       <SectionHeader title={t2('pr.subscription')} />
       <button onClick={() => setPricing(true)} className="glass lift block w-full p-4 text-left">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-[15px] font-bold">
             <Crown size={16} className="text-acc" />
-            {t2(`plan.${settings.plan}`)}
+            {t2(`plan.${currentPlan}`)}
           </span>
           <span className="tabular text-[12px] text-t2">
             {usedToday}/{limit} · {t2('ai.usage')}
           </span>
         </div>
-        <p className="mt-1 text-[12px] text-t3">{t2('plan.comingSoon')}</p>
+        {subscription.expiresAt && (
+          <p className="mt-1 text-[12px] text-t3">
+            {t2('plan.expires')} {subscription.expiresAt.slice(0, 10)}
+          </p>
+        )}
       </button>
+
+      <div className="mt-4">
+        <ReferralBlock />
+      </div>
 
       <SectionHeader title={t2('pr.data')} />
       <Group icon={<Database size={15} className="text-acc" />} title={t2('pr.data')}>
@@ -233,33 +263,7 @@ export default function Profile() {
 
       {/* pricing */}
       <Sheet open={pricing} onClose={() => setPricing(false)} title={t2('pr.subscription')}>
-        <div className="flex flex-col gap-3">
-          {(['free', 'pro', 'premium'] as const).map((p) => (
-            <div
-              key={p}
-              className={`glass-sm p-4 ${settings.plan === p ? 'border-[rgba(142,123,239,0.5)]' : ''}`}
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[15px] font-extrabold">{t2(`plan.${p}`)}</span>
-                {settings.plan === p ? (
-                  <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-bold text-acc2">{t2('plan.current')}</span>
-                ) : null}
-              </div>
-              <ul className="space-y-1.5">
-                {[1, 2, 3].map((n) => (
-                  <li key={n} className="flex items-center gap-2 text-[13px] text-t2">
-                    <span className="h-1 w-1 rounded-full bg-acc" />
-                    {t2(`plan.${p[0]}${n}`)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-          <div className="flex items-start gap-2.5 rounded-2xl bg-white/4 p-3.5 text-[12px] leading-relaxed text-t3">
-            <Info size={14} className="mt-0.5 shrink-0" />
-            {t2('plan.comingSoon')}
-          </div>
-        </div>
+        <PricingSheet onClose={() => setPricing(false)} />
       </Sheet>
 
       {/* clear data */}

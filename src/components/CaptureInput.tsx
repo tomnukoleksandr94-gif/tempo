@@ -71,7 +71,7 @@ export function CaptureInput({
             }
           }}
           className={`press flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full ${
-            listening ? 'bg-red/20 text-red' : 'bg-white/8 text-t2'
+            listening ? 'bg-red/20 text-red' : 'bg-soft2 text-t2'
           }`}
         >
           {listening ? <Mic size={17} className="animate-pulse" /> : <Mic size={17} />}
@@ -83,7 +83,7 @@ export function CaptureInput({
           haptic('light')
           fileRef.current?.click()
         }}
-        className={`press flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full bg-white/8 text-t2`}
+        className={`press flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full bg-soft2 text-t2`}
       >
         <Camera size={17} />
       </button>
@@ -92,7 +92,7 @@ export function CaptureInput({
         onClick={send}
         disabled={!text.trim() || busy}
         className={`press flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full transition-all ${
-          text.trim() && !busy ? 'bg-acc text-black' : 'bg-white/8 text-t3'
+          text.trim() && !busy ? 'bg-acc text-black' : 'bg-soft2 text-t3'
         }`}
       >
         {busy ? <Sparkles size={16} className="animate-pulse" /> : <ArrowUp size={18} strokeWidth={2.5} />}

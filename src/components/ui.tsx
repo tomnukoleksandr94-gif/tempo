@@ -69,13 +69,13 @@ export function Sheet({
           <button
             onClick={onClose}
             aria-label="close"
-            className="press flex h-9 w-9 items-center justify-center rounded-full bg-white/8 text-t2"
+            className="press flex h-9 w-9 items-center justify-center rounded-full bg-soft2 text-t2"
           >
             <X size={17} />
           </button>
         </div>
         <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-[max(env(safe-area-inset-bottom),28px)] pt-1">{children}</div>
-        {footer && <div className="border-t border-white/8 bg-black/40 px-5 py-3 backdrop-blur-xl">{footer}</div>}
+        {footer && <div className="border-t bd-soft bg-black/40 px-5 py-3 backdrop-blur-xl">{footer}</div>}
       </div>
     </div>,
     document.body
@@ -92,7 +92,7 @@ export function Btn({ variant = 'primary', size = 'md', className = '', children
   const sizes = { sm: 'h-9 px-4 text-[13px]', md: 'h-11 px-5 text-sm', lg: 'h-12 px-6 text-[15px]' }
   const variants = {
     primary: 'bg-acc text-black hover:brightness-110',
-    ghost: 'bg-white/8 text-t1 border border-white/10 hover:bg-white/12',
+    ghost: 'bg-soft2 text-t1 border bd-soft hover:bg-soft3',
     danger: 'bg-red/15 text-red',
     soft: 'bg-[rgba(142,123,239,0.15)] text-acc2'
   }
@@ -120,7 +120,7 @@ export function IconBtn({
   return (
     <button
       aria-label={label}
-      className={`press flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-t2 hover:bg-white/14 ${className}`}
+      className={`press flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-soft2 text-t2 hover:bg-soft3 ${className}`}
       onClick={(e) => {
         haptic('select')
         onClick?.(e)
@@ -154,12 +154,12 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void
 }) {
   return (
-    <div className="flex rounded-full bg-white/6 p-1">
+    <div className="flex rounded-full bg-soft p-1">
       {options.map((o) => (
         <button
           key={o.id}
           className={`press flex-1 rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-            value === o.id ? 'bg-white/14 text-t1 shadow' : 'text-t2'
+            value === o.id ? 'bg-soft3 text-t1 shadow' : 'text-t2'
           }`}
           onClick={() => {
             haptic('select')
@@ -188,7 +188,7 @@ export function Chip({
   return (
     <button
       className={`press inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors ${
-        active ? 'border-white/20 bg-white/14 text-t1' : 'border-white/8 bg-white/4 text-t2 hover:bg-white/8'
+        active ? 'bd-soft2 bg-soft3 text-t1' : 'bd-soft bg-soft text-t2 hover:bg-soft2'
       }`}
       onClick={() => {
         haptic('select')
@@ -207,7 +207,7 @@ export function Switch({ checked, onChange }: { checked: boolean; onChange: (v: 
     <button
       role="switch"
       aria-checked={checked}
-      className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors ${checked ? 'bg-acc' : 'bg-white/15'}`}
+      className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors ${checked ? 'bg-acc' : 'bg-soft3'}`}
       onClick={() => {
         haptic('light')
         onChange(!checked)

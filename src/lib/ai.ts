@@ -287,3 +287,35 @@ export async function generateInsight(data: CtxData): Promise<string> {
     clearTimeout(timer)
   }
 }
+
+/** Finance-focused AI report: monthly spending analysis, plain text. */
+export async function generateFinanceReport(data: CtxData): Promise<string> {
+  const system =
+    buildContext(data) +
+    "\n\nYou generate a SHORT personal finance report (max 4 sentences) about the current month based ONLY on this real data: total income vs expenses, top spending categories, budget overruns if visible, and ONE concrete actionable tip. If there is almost no financial data, say so honestly and briefly. Reply in the user's language (default Russian). Plain text, no JSON."
+  const key = apiKeyOf(data.settings)
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT)
+  try {
+    const res = await fetch(`${API}/${data.settings.model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: 'Generate this month\'s finance report.' }] }],
+        systemInstruction: { parts: [{ text: system }] },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 400 }
+      }),
+      signal: ctrl.signal
+    })
+    if (!res.ok) throw new AiError('report failed', 'network')
+    const json = await res.json()
+    const text: string =
+      json?.candidates?.[0]?.content?.parts
+        ?.filter((p: any) => typeof p.text === 'string' && !p.thought)
+        .map((p: any) => p.text)
+        .join('') ?? ''
+    return text.trim().slice(0, 600)
+  } finally {
+    clearTimeout(timer)
+  }
+}

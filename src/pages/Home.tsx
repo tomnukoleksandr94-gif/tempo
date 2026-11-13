@@ -9,7 +9,7 @@ import { CaptureInput } from '../components/CaptureInput'
 import { CaptureFlow, type CaptureRequest } from '../components/CaptureFlow'
 import { SectionHeader, StatTile, EmptyState, useToast } from '../components/ui'
 import { Ring, Sparkline, MacroBar } from '../components/charts'
-import { useStore, useDayExpense, weekDailyTotals, mealsKcal, mealsMacros, nextEventDate } from '../lib/store'
+import { useStore, useDayExpense, weekDailyTotals, mealsKcal, mealsMacros, nextEventDate, DEFAULT_WIDGETS } from '../lib/store'
 import { useT } from '../lib/hooks'
 import { generateInsight } from '../lib/ai'
 import { t } from '../lib/i18n'
@@ -19,6 +19,10 @@ import { haptic } from '../lib/telegram'
 import type { Currency } from '../lib/types'
 
 export default function HomePage({ go }: { go: (t: TabId) => void }) {
+  const goPlanning = (tab: 'calendar' | 'tasks' | 'nutrition') => {
+    useStore.getState().setPlanningTab(tab)
+    go('planning')
+  }
   const t2 = useT()
   const toast = useToast()
   const settings = useStore((s) => s.settings)
@@ -65,6 +69,13 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
 
   // ----- derived data -----
   const spendToday = useDayExpense(today)
+  const balance = useMemo(
+    () =>
+      Math.round(
+        transactions.reduce((a, t) => a + (t.kind === 'income' ? t.amount : -t.amount), 0) * 100
+      ) / 100,
+    [transactions]
+  )
   const kcalToday = useMemo(() => mealsKcal(meals.filter((m) => m.date === today)), [meals, today])
   const macrosToday = useMemo(() => mealsMacros(meals.filter((m) => m.date === today)), [meals, today])
   const openTasks = useMemo(() => {
@@ -72,7 +83,7 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
       .filter((x) => !x.done)
       .sort((a, b) => (b.priority - a.priority) || ((a.due ?? '9999') < (b.due ?? '9999') ? -1 : 1))
     const todays = list.filter((x) => !x.due || x.due <= today)
-    return { todays: todays.slice(0, 4), left: list.length }
+    return { todays: todays.slice(0, 3), left: list.length }
   }, [tasks, today])
   const nextEvents = useMemo(() => {
     return events
@@ -88,6 +99,12 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
     overview: (
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
         <StatTile
+          label={t2('home.balance')}
+          icon={<Wallet size={13} />}
+          value={money(balance, settings.currency, locale)}
+          onClick={() => go('finance')}
+        />
+        <StatTile
           label={t2('home.spendToday')}
           icon={<Wallet size={13} />}
           value={money(spendToday, settings.currency, locale)}
@@ -98,20 +115,13 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
           icon={<Flame size={13} />}
           value={`${kcalToday}`}
           sub={`${t2('nut.target')} ${settings.kcalTarget}`}
-          onClick={() => go('nutrition')}
+          onClick={() => goPlanning('nutrition')}
         />
         <StatTile
           label={t2('home.tasksLeft')}
           icon={<ListChecks size={13} />}
           value={String(openTasks.left)}
-          onClick={() => go('tasks')}
-        />
-        <StatTile
-          label={t2('home.nextEvent')}
-          icon={<CalendarClock size={13} />}
-          value={nextEvents[0] ? nextEvents[0].e.title : t2('c.none')}
-          sub={nextEvents[0] ? `${relativeDay(nextEvents[0].d!, locale, today)}${nextEvents[0].e.time ? ' · ' + nextEvents[0].e.time : ''}` : undefined}
-          onClick={() => go('calendar')}
+          onClick={() => goPlanning('tasks')}
         />
       </div>
     ),
@@ -150,10 +160,10 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
         {nextEvents.map(({ e, d }, i) => (
           <button
             key={e.id}
-            onClick={() => go('calendar')}
-            className={`flex w-full items-center gap-3 px-4 py-3 text-left ${i > 0 ? 'border-t border-white/6' : ''}`}
+            onClick={() => goPlanning('calendar')}
+            className={`flex w-full items-center gap-3 px-4 py-3 text-left ${i > 0 ? 'border-t bd-soft' : ''}`}
           >
-            <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-white/6">
+            <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-soft">
               <span className="text-[9px] font-bold uppercase leading-none text-t3">{fmtDate(d!, locale).split(' ')[1]}</span>
               <span className="text-[15px] font-bold leading-tight">{fmtDate(d!, locale).split(' ')[0]}</span>
             </div>
@@ -179,18 +189,18 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
           <EmptyState icon={<ListChecks size={30} />} title={t2('home.noTasks')} />
         )}
         {openTasks.todays.map((task, i) => (
-          <div key={task.id} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-white/6' : ''}`}>
+          <div key={task.id} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t bd-soft' : ''}`}>
             <button
               aria-label="toggle task"
               onClick={() => {
                 haptic('success')
                 toggleTask(task.id)
               }}
-              className="press flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-white/25 hover:border-acc"
+              className="press flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 bd-soft2 hover:border-acc"
             >
               <Check size={13} className="opacity-0" />
             </button>
-            <button onClick={() => go('tasks')} className="min-w-0 flex-1 text-left">
+            <button onClick={() => goPlanning('tasks')} className="min-w-0 flex-1 text-left">
               <div className="clamp1 text-sm font-medium">{task.title}</div>
               <div className="mt-0.5 flex items-center gap-2 text-xs text-t3">
                 <span
@@ -231,7 +241,7 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
       captures.length > 0 ? (
         <div className="glass overflow-hidden">
           {captures.slice(0, 3).map((c, i) => (
-            <div key={c.id} className={`flex items-center gap-3 px-4 py-2.5 ${i > 0 ? 'border-t border-white/6' : ''}`}>
+            <div key={c.id} className={`flex items-center gap-3 px-4 py-2.5 ${i > 0 ? 'border-t bd-soft' : ''}`}>
               <History size={14} className="shrink-0 text-t3" />
               <span className="min-w-0 flex-1 truncate text-[13px] text-t2">{c.input}</span>
               <span
@@ -253,8 +263,8 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
   return (
     <div className="mx-auto max-w-[640px] md:max-w-none">
       {/* greeting */}
-      <div className="mb-5">
-        <h1 className="text-xl font-extrabold tracking-tight">
+      <div className="mb-4">
+        <h1 className="text-lg font-bold tracking-tight">
           {greeting(hour, locale)}
           {settings.name ? `, ${settings.name}` : ''}
         </h1>
@@ -266,7 +276,7 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
       <p className="mt-2 px-1 text-center text-[12px] text-t3">{t2('home.captureHint')}</p>
 
       {/* widgets */}
-      {settings.widgets.map((w, i) =>
+      {(settings.widgets ?? DEFAULT_WIDGETS).map((w, i) =>
         WIDGETS[w] ? (
           <div key={w} className="rise" style={{ animationDelay: `${i * 60}ms` }}>
             {w !== 'overview' && w !== 'insight' && (
@@ -280,7 +290,7 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
                 }
                 action={
                   (w === 'upcoming' || w === 'tasks') && (
-                    <button onClick={() => go(w === 'upcoming' ? 'calendar' : 'tasks')} className="text-[13px] font-semibold text-acc">
+                    <button onClick={() => goPlanning(w === 'upcoming' ? 'calendar' : 'tasks')} className="text-[13px] font-semibold text-acc">
                       {t2('home.viewAll')}
                     </button>
                   )

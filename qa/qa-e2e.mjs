@@ -44,16 +44,19 @@ let fin = await page.evaluate(() => document.body.innerText)
 fin.includes('18') && /обед|Обед/i.test(fin) ? ok('finance shows €18 expense') : fail('finance shows €18 expense', fin.slice(0, 200))
 await page.screenshot({ path: 'qa/shot-finance.jpg', type: 'jpeg', quality: 80 })
 
-// ---- 4. Calendar shows the event tomorrow ----
+// ---- 4. Calendar shows the event tomorrow (via Planning hub) ----
+await page.getByText('План', { exact: true }).last().click()
+await page.waitForTimeout(600)
 await page.getByText('Календарь', { exact: true }).last().click()
 await page.waitForTimeout(600)
-// event is tomorrow (Nov 13) — click that day in the grid
-await page.locator('button, [class*=cell], div').filter({ hasText: /^13$/ }).first().click().catch(() => {})
+// the event is tomorrow — click that day in the grid
+const tomorrowDay = String(new Date(Date.now() + 86400000).getDate())
+await page.locator('button').filter({ hasText: new RegExp('^' + tomorrowDay + '$') }).first().click({ timeout: 8000 }).catch(() => {})
 await page.waitForTimeout(500)
 let cal = await page.evaluate(() => document.body.innerText)
 cal.includes('Встреча') || cal.includes('встреча') ? ok('calendar shows Встреча') : fail('calendar shows Встреча', cal.slice(0, 300))
 
-// ---- 5. Nutrition shows the meal ----
+// ---- 5. Nutrition shows the meal (Planning sub-tab) ----
 await page.getByText('Еда', { exact: true }).last().click()
 await page.waitForTimeout(600)
 let nut = await page.evaluate(() => document.body.innerText)

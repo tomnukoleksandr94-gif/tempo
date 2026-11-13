@@ -167,7 +167,7 @@ export function MacroBar({ label, value, target, color }: { label: string; value
           {Math.round(value)} <span className="text-t3">/ {target} г</span>
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+      <div className="h-1.5 overflow-hidden rounded-full bg-soft2">
         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>

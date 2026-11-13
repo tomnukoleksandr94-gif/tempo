@@ -159,7 +159,7 @@ export default function CalendarPage() {
                   setSel(c.iso)
                 }}
                 className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl text-[14px] font-semibold transition-colors ${
-                  isSel ? 'bg-acc text-black' : c.inMonth ? 'text-t1 hover:bg-white/6' : 'text-t3/40'
+                  isSel ? 'bg-acc text-black' : c.inMonth ? 'text-t1 hover:bg-soft' : 'text-t3/40'
                 } ${c.isToday && !isSel ? 'text-acc' : ''}`}
               >
                 {c.day}
@@ -192,7 +192,7 @@ export default function CalendarPage() {
         )}
         {selEvents.map((e) => (
           <button key={e.id} onClick={() => openEdit(e)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
-            <div className="tabular flex h-11 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-white/6">
+            <div className="tabular flex h-11 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-soft">
               {e.time ? (
                 <>
                   <span className="text-[13px] font-bold leading-none">{e.time}</span>

@@ -3,7 +3,8 @@ import type { ReactElement } from 'react'
 import { Sparkles, Wallet, ListChecks, CalendarClock, UtensilsCrossed } from 'lucide-react'
 import { CaptureInput } from '../components/CaptureInput'
 import { CaptureFlow, type CaptureRequest } from '../components/CaptureFlow'
-import { useStore, PLAN_LIMITS } from '../lib/store'
+import { useStore } from '../lib/store'
+import { aiLimitFor } from '../lib/billing'
 import { useT } from '../lib/hooks'
 import { t } from '../lib/i18n'
 import { uid } from '../lib/utils'
@@ -23,8 +24,7 @@ export default function Assistant() {
   const chat = useStore((s) => s.chat)
   const pushChat = useStore((s) => s.pushChat)
   const usage = useStore((s) => s.aiUsage)
-  const plan = useStore((s) => s.settings.plan)
-  const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free
+  const limit = useStore((s) => aiLimitFor(s.subscription))
 
   const [req, setReq] = useState<CaptureRequest | null>(null)
   const [busy, setBusy] = useState(false)

@@ -116,7 +116,7 @@ export default function Nutrition() {
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wide text-acc2">{t2(`meal.${m.mealType}`)}</span>
                   {m.source === 'ai' && (
-                    <span className="rounded-full bg-white/6 px-1.5 py-0.5 text-[9px] font-bold text-t3">AI ≈</span>
+                    <span className="rounded-full bg-soft px-1.5 py-0.5 text-[9px] font-bold text-t3">AI ≈</span>
                   )}
                 </div>
                 <div className="clamp1 mt-0.5 text-sm font-semibold">{m.title}</div>
@@ -125,7 +125,7 @@ export default function Nutrition() {
                     .filter((it) => it.name.trim().toLowerCase() !== m.title.trim().toLowerCase() || m.items.length > 1)
                     .slice(0, 4)
                     .map((it, i) => (
-                      <span key={i} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-t2">
+                      <span key={i} className="rounded-full bg-soft px-2 py-0.5 text-[11px] text-t2">
                         {it.name} · ≈{Math.round(it.kcal)}
                       </span>
                     ))}
@@ -233,7 +233,7 @@ export default function Nutrition() {
               options={(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((m) => ({ id: m, label: t2(`meal.${m}`) }))}
             />
             {manual.items.map((it, i) => (
-              <div key={i} className="flex items-center justify-between rounded-xl bg-white/4 px-3 py-2 text-[13px]">
+              <div key={i} className="flex items-center justify-between rounded-xl bg-soft px-3 py-2 text-[13px]">
                 <span className="min-w-0 flex-1 truncate">{it.name}</span>
                 <span className="tabular shrink-0 font-semibold text-t2">≈{it.kcal} kcal</span>
               </div>

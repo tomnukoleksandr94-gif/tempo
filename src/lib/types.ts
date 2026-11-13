@@ -90,6 +90,39 @@ export interface Settings {
   kcalTarget: number
   widgets: string[]
   autoConfirm: boolean
+  theme: 'auto' | 'dark' | 'light'
+}
+
+// ---------- subscription & billing ----------
+
+export type Plan = 'free' | 'plus' | 'pro'
+export type BillingPeriod = 'monthly' | 'annual'
+
+export interface PaymentRecord {
+  id: string
+  plan: Plan
+  period: BillingPeriod
+  stars: number
+  status: 'pending' | 'paid' | 'refunded'
+  ts: number
+}
+
+export interface Subscription {
+  plan: Plan
+  period: BillingPeriod | null
+  /** ISO date of expiry (null for free) */
+  expiresAt: string | null
+  status: 'active' | 'expired' | 'none'
+  /** auto-renewal: Stars payments repeat via bot chat, status shown from server */
+  autoRenew: boolean
+  history: PaymentRecord[]
+}
+
+export interface ReferralStats {
+  invited: number
+  paying: number
+  /** claimed reward keys */
+  claimed: string[]
 }
 
 export interface ChatMessage {

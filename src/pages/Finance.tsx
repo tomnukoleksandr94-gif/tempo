@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  Plus, ChevronLeft, ChevronRight, Search, Trash2, Repeat2
+  Plus, ChevronLeft, ChevronRight, Search, Trash2, Repeat2, Sparkles
 } from 'lucide-react'
 import { SectionHeader, StatTile, Segmented, Sheet, Btn, Field, Chip, EmptyState, useToast, IconBtn } from '../components/ui'
 import { Donut, Bars } from '../components/charts'
@@ -10,6 +10,7 @@ import { CAT_META, EXPENSE_CATS, INCOME_CATS, DONUT_COLORS } from '../lib/catego
 import { money, todayISO, fmtDate, relativeDay, parseAmount } from '../lib/utils'
 import type { Currency, Transaction } from '../lib/types'
 import { haptic } from '../lib/telegram'
+import { generateFinanceReport } from '../lib/ai'
 
 export default function Finance() {
   const t2 = useT()
@@ -28,6 +29,9 @@ export default function Finance() {
   const [period, setPeriod] = useState<'week' | 'month'>('month')
   const [query, setQuery] = useState('')
   const [catFilter, setCatFilter] = useState<string | null>(null)
+  const [breakdownKind, setBreakdownKind] = useState<'expense' | 'income'>('expense')
+  const [report, setReport] = useState('')
+  const [reportBusy, setReportBusy] = useState(false)
 
   // month being viewed
   const viewDate = useMemo(() => {
@@ -45,7 +49,24 @@ export default function Finance() {
   // charts period
   const from = period === 'week' ? todayISO(new Date(Date.now() - 6 * 86400000)) : `${mk}-01`
   const to = period === 'week' ? today : `${mk}-31`
-  const byCat = useMemo(() => expensesByCategory(transactions, from, to), [transactions, from, to])
+  const byCat = useMemo(
+    () => expensesByCategory(transactions, from, to, breakdownKind),
+    [transactions, from, to, breakdownKind]
+  )
+  const totals = useMemo(
+    () =>
+      transactions
+        .filter((x) => x.date >= from && x.date <= to)
+        .reduce(
+          (a, x) => {
+            if (x.kind === 'expense') a.exp += x.amount
+            else a.inc += x.amount
+            return a
+          },
+          { exp: 0, inc: 0 }
+        ),
+    [transactions, from, to]
+  )
   const days = useMemo(() => {
     const n = period === 'week' ? 7 : 30
     return Array.from({ length: n }, (_, i) => {
@@ -154,6 +175,33 @@ export default function Finance() {
         <StatTile label={t2('fin.expense')} value={money(exp, settings.currency, locale)} />
       </div>
 
+      {/* AI finance report */}
+      <button
+        disabled={reportBusy}
+        onClick={() => {
+          if (reportBusy) return
+          const usage = useStore.getState().bumpAiUsage()
+          if (!usage.ok) {
+            toast(t2('ai.limitReached'), 'err')
+            return
+          }
+          setReportBusy(true)
+          setReport('')
+          generateFinanceReport({ transactions, tasks: [], events: [], meals: [], settings })
+            .then((text) => setReport(text))
+            .catch(() => toast(t2('err.ai'), 'err'))
+            .finally(() => setReportBusy(false))
+        }}
+        className="glass lift mt-3 block w-full p-4 text-left"
+      >
+        <span className="flex items-center gap-2 text-[13px] font-bold text-acc2">
+          <Sparkles size={14} className="text-acc" />
+          {t2('fin.aiReport')}
+        </span>
+        {report && <p className="mt-1.5 text-[13px] leading-snug text-t2">{report}</p>}
+        {!report && <p className="mt-1 text-[12px] text-t3">{t2('fin.aiReportHint')}</p>}
+      </button>
+
       <SectionHeader
         title={t2('fin.byCategory')}
         action={
@@ -169,6 +217,18 @@ export default function Finance() {
           </div>
         }
       />
+      <div className="mb-3 flex items-center gap-2">
+        <div className="w-[180px]">
+          <Segmented
+            value={breakdownKind}
+            onChange={(v) => setBreakdownKind(v)}
+            options={[
+              { id: 'expense', label: t2('fin.expense') },
+              { id: 'income', label: t2('fin.income') }
+            ]}
+          />
+        </div>
+      </div>
       <div className="glass flex items-center gap-5 p-4">
         <Donut
           size={132}
@@ -176,7 +236,7 @@ export default function Finance() {
           segments={byCat.slice(0, 8).map((c, i) => ({ value: c.value, color: DONUT_COLORS[i % DONUT_COLORS.length] }))}
         >
           <span className="tabular text-[15px] font-bold">
-            {money(byCat.reduce((a, c) => a + c.value, 0), settings.currency, locale)}
+            {money(totals[breakdownKind === 'expense' ? 'exp' : 'inc'], settings.currency, locale)}
           </span>
           <span className="text-[10px] text-t3">{t2(period === 'week' ? 'c.week' : 'c.month')}</span>
         </Donut>
@@ -222,7 +282,7 @@ export default function Finance() {
                   {r.budget > 0 && <span className="text-t3"> / {money(r.budget, settings.currency, locale)}</span>}
                 </span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+              <div className="h-1.5 overflow-hidden rounded-full bg-soft2">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{ width: `${r.budget > 0 ? pct : Math.min(100, r.spent / 10)}%`, background: over ? '#FF453A' : meta.color }}
@@ -272,7 +332,7 @@ export default function Finance() {
               const Icon = meta.icon
               return (
                 <button key={x.id} onClick={() => openEdit(x)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/6" style={{ color: meta.color }}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-soft" style={{ color: meta.color }}>
                     <Icon size={16} />
                   </span>
                   <span className="min-w-0 flex-1">

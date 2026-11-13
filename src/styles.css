@@ -14,18 +14,52 @@
   --color-ink: #000000;
 }
 
-:root {
+/* ---------- themes: dark (default) & light ---------- */
+:root,
+html[data-theme='dark'] {
   --bg: #000000;
   --s1: #0d0d0f;
   --s2: #15151a;
   --glass: rgba(22, 22, 26, 0.68);
   --glass-brd: rgba(255, 255, 255, 0.08);
   --glass-brd2: rgba(255, 255, 255, 0.14);
+  --soft-bg: rgba(255, 255, 255, 0.05);
+  --soft-bg2: rgba(255, 255, 255, 0.09);
+  --soft-bg3: rgba(255, 255, 255, 0.14);
+  --line: rgba(255, 255, 255, 0.08);
+  --line2: rgba(255, 255, 255, 0.16);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --glass-nav: rgba(10, 10, 12, 0.78);
   --accent: #8e7bef;
   --accent-soft: rgba(142, 123, 239, 0.15);
+  --color-t1: #f5f5f7;
+  --color-t2: #9a9aa2;
+  --color-t3: #5d5d64;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --nav-h: 64px;
   color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  --bg: #f5f5f6;
+  --s1: #ffffff;
+  --s2: #ededef;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-brd: rgba(0, 0, 0, 0.08);
+  --glass-brd2: rgba(0, 0, 0, 0.14);
+  --soft-bg: rgba(0, 0, 0, 0.04);
+  --soft-bg2: rgba(0, 0, 0, 0.07);
+  --soft-bg3: rgba(0, 0, 0, 0.11);
+  --line: rgba(0, 0, 0, 0.08);
+  --line2: rgba(0, 0, 0, 0.16);
+  --shadow: 0 8px 28px rgba(20, 20, 30, 0.08);
+  --glass-nav: rgba(255, 255, 255, 0.82);
+  --accent: #6f5bd8;
+  --accent-soft: rgba(111, 91, 216, 0.12);
+  --color-t1: #17171b;
+  --color-t2: #6b6b74;
+  --color-t3: #a3a3ab;
+  color-scheme: light;
 }
 
 @layer base {
@@ -125,7 +159,7 @@ h3 {
 }
 
 .glass-nav {
-  background: rgba(10, 10, 12, 0.78);
+  background: var(--glass-nav);
   -webkit-backdrop-filter: blur(24px) saturate(170%);
   backdrop-filter: blur(24px) saturate(170%);
   border-top: 1px solid var(--glass-brd);
@@ -305,6 +339,10 @@ h3 {
   color: var(--color-t3);
 }
 select.inp {
+  line-height: 1.2;
+  padding-top: 8px;
+  padding-bottom: 8px;
+
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9aa2' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
@@ -350,3 +388,11 @@ input[type='time'].inp::-webkit-calendar-picker-indicator {
     padding-top: 1.5rem;
   }
 }
+
+/* ---------- semantic surfaces (theme-aware) ---------- */
+.bg-soft { background: var(--soft-bg); }
+.bg-soft2 { background: var(--soft-bg2); }
+.bg-soft3 { background: var(--soft-bg3); }
+.bd-soft { border-color: var(--line); }
+.bd-soft2 { border-color: var(--line2); }
+.surface { background: var(--s1); }
