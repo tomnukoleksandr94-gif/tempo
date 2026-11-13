@@ -6,3 +6,4 @@ qa/*.jpg
 .DS_Store
 tsconfig.tsbuildinfo
 data.json
+data.backup.json

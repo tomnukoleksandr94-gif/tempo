@@ -1,3 +1,4 @@
+import { LOCALE_TAGS } from '../lib/utils'
 import { useMemo, useState } from 'react'
 import { Plus, ChevronLeft, ChevronRight, Clock, Bell, Repeat2, MapPin, Trash2 } from 'lucide-react'
 import { SectionHeader, Sheet, Btn, Field, IconBtn, EmptyState, useToast } from '../components/ui'
@@ -36,7 +37,7 @@ export default function CalendarPage() {
     location: string
   }>(null)
 
-  const monthLabel = new Date(view.y, view.m, 1).toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-GB', { month: 'long', year: 'numeric' })
+  const monthLabel = new Date(view.y, view.m, 1).toLocaleDateString(LOCALE_TAGS[locale], { month: 'long', year: 'numeric' })
 
   const cells = useMemo(() => {
     const first = new Date(view.y, view.m, 1)
@@ -110,7 +111,7 @@ export default function CalendarPage() {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(base)
       d.setDate(d.getDate() + i)
-      return d.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-GB', { weekday: 'short' }).replace('.', '')
+      return d.toLocaleDateString(LOCALE_TAGS[locale], { weekday: 'short' }).replace('.', '')
     })
   }, [locale])
 

@@ -1,3 +1,4 @@
+import { LOCALE_TAGS } from './utils'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from './store'
 import { t as translate } from './i18n'
@@ -23,7 +24,7 @@ export function useSpeechInput() {
       try {
         const rec = new SR()
         recRef.current = rec
-        rec.lang = locale === 'ru' ? 'ru-RU' : 'en-GB'
+        rec.lang = LOCALE_TAGS[locale] ?? 'en-GB'
         rec.interimResults = true
         rec.continuous = false
         let finalText = ''

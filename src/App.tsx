@@ -1,3 +1,4 @@
+import { LOCALE_TAGS } from './lib/utils'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Home as HomeIcon, Sparkles, Wallet, CalendarRange, CreditCard, UserRound
@@ -59,8 +60,8 @@ function IslandBar() {
     return () => clearInterval(id)
   }, [])
   const locale = useStore((s) => s.settings.locale)
-  const time = now.toLocaleTimeString(locale === 'ru' ? 'ru-RU' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
-  const date = now.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  const time = now.toLocaleTimeString(LOCALE_TAGS[locale], { hour: '2-digit', minute: '2-digit' })
+  const date = now.toLocaleDateString(LOCALE_TAGS[locale], { weekday: 'short', day: 'numeric', month: 'short' })
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),6px)] z-40 flex justify-center">
       <div className="glass-sm flex h-9 items-center gap-2.5 rounded-full px-4 !py-0 shadow-lg">
@@ -75,6 +76,7 @@ function IslandBar() {
 
 // ---------- tab bar (mobile) ----------
 function TabBar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
+  const locale = useStore((s) => s.settings.locale)
   return (
     <nav className="glass-nav fixed inset-x-0 bottom-0 z-40 md:hidden" aria-label="main">
       <div className="mx-auto flex max-w-[520px] items-stretch justify-between px-1 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5">
@@ -89,7 +91,7 @@ function TabBar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
             style={{ color: tab === tb.id ? 'var(--accent)' : 'var(--color-t3)' }}
           >
             {tb.icon}
-            <span className="w-full truncate text-center text-[10px] font-semibold leading-none">{t(tb.key)}</span>
+            <span className="w-full truncate text-center text-[10px] font-semibold leading-none">{t(tb.key, locale)}</span>
           </button>
         ))}
       </div>
@@ -99,6 +101,7 @@ function TabBar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
 
 // ---------- sidebar (desktop) ----------
 function Sidebar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
+  const locale = useStore((s) => s.settings.locale)
   return (
     <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col border-r bd-soft px-4 py-6 md:flex" aria-label="main">
       <div className="mb-8 flex items-center gap-2.5 px-2">
@@ -118,7 +121,7 @@ function Sidebar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
             }`}
           >
             <span style={{ color: tab === tb.id ? 'var(--accent)' : undefined }}>{tb.icon}</span>
-            {t(tb.key)}
+            {t(tb.key, locale)}
           </button>
         ))}
       </nav>
@@ -167,6 +170,7 @@ function Reminders() {
 export default function App() {
   const [tab, setTab] = useState<TabId>('home')
   const themePref = useStore((s) => s.settings.theme)
+  const effects = useStore((s) => s.settings.effects)
 
   // apply theme: manual preference, or auto (Telegram scheme / dark)
   useEffect(() => {
@@ -190,7 +194,7 @@ export default function App() {
   }
   return (
     <ToastProvider>
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[1080px] md:flex-row">
+      <div className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-[1080px] md:flex-row${effects ? '' : ' no-effects'}`}>
         <Sidebar tab={tab} go={go} />
         <main className="pt-island min-w-0 flex-1 px-4 pb-nav md:px-8 md:pb-10">
           {tab === 'home' && <HomePage go={go} />}

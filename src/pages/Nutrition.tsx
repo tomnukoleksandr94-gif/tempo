@@ -1,3 +1,4 @@
+import { LOCALE_TAGS } from '../lib/utils'
 import { useMemo, useState } from 'react'
 import { Plus, Flame, Trash2, Sparkles, Camera } from 'lucide-react'
 import { SectionHeader, Sheet, Btn, Field, IconBtn, EmptyState, useToast, Segmented } from '../components/ui'
@@ -31,7 +32,7 @@ export default function Nutrition() {
       const iso = addDays(today, i - 6)
       const dayMeals = meals.filter((m) => m.date === iso)
       return {
-        label: new Date(iso).toLocaleDateString(settings.locale === 'ru' ? 'ru-RU' : 'en-GB', { weekday: 'short' }),
+        label: new Date(iso).toLocaleDateString(LOCALE_TAGS[settings.locale], { weekday: 'short' }),
         value: mealsKcal(dayMeals)
       }
     })

@@ -162,6 +162,7 @@ export function buildContext(d: CtxData): string {
     today,
     weekday: new Date().toLocaleDateString('en-GB', { weekday: 'long' }),
     currency: d.settings.currency,
+    ui_language: d.settings.locale,
     expense_categories: [
       'food', 'groceries', 'transport', 'home', 'health', 'fun', 'clothes', 'education', 'gifts', 'bills', 'other'
     ],

@@ -1,3 +1,4 @@
+import { LOCALE_TAGS } from '../lib/utils'
 import { useMemo, useState } from 'react'
 import {
   Plus, ChevronLeft, ChevronRight, Search, Trash2, Repeat2, Sparkles
@@ -39,7 +40,7 @@ export default function Finance() {
     d.setMonth(d.getMonth() + monthOffset)
     return d
   }, [monthOffset])
-  const monthLabel = viewDate.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-GB', { month: 'long', year: 'numeric' })
+  const monthLabel = viewDate.toLocaleDateString(LOCALE_TAGS[locale], { month: 'long', year: 'numeric' })
   const mk = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}`
 
   const monthTx = useMemo(() => transactions.filter((x) => x.date.startsWith(mk)), [transactions, mk])
@@ -73,7 +74,7 @@ export default function Finance() {
       const d = new Date(Date.now() - (n - 1 - i) * 86400000)
       const iso = todayISO(d)
       return {
-        label: d.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-GB', period === 'week' ? { weekday: 'short' } : { day: 'numeric' }),
+        label: d.toLocaleDateString(LOCALE_TAGS[locale], period === 'week' ? { weekday: 'short' } : { day: 'numeric' }),
         value: Math.round(
           transactions.filter((x) => x.kind === 'expense' && x.date === iso).reduce((a, x) => a + x.amount, 0)
         )

@@ -87,13 +87,13 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
       <Group icon={<Languages size={15} className="text-acc" />} title={t2('pr.language')}>
         <Row label={t2('pr.language')}>
           <div className="flex rounded-full bg-soft p-1">
-            {(['ru', 'en'] as const).map((l) => (
+            {(['ru', 'uk', 'en', 'de', 'fr'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setSettings({ locale: l })}
                 className={`press rounded-full px-3.5 py-1 text-[13px] font-semibold ${settings.locale === l ? 'bg-soft3 text-t1' : 'text-t2'}`}
               >
-                {l === 'ru' ? 'Русский' : 'English'}
+                {{ ru: 'Рус', uk: 'Укр', en: 'Eng', de: 'De', fr: 'Fr' }[l]}
               </button>
             ))}
           </div>
@@ -117,6 +117,14 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
               </button>
             ))}
           </div>
+        </Row>
+        <Row label={t2('pr.effects')}>
+          <button
+            onClick={() => setSettings({ effects: !settings.effects })}
+            className={`press rounded-full px-4 py-1 text-[12px] font-semibold ${settings.effects ? 'bg-acc/15 text-acc' : 'bg-soft text-t2'}`}
+          >
+            {settings.effects ? t2('pr.on') : t2('pr.off')}
+          </button>
         </Row>
       </Group>
 

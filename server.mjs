@@ -25,8 +25,27 @@ const PORT = Number(process.env.PORT || 3000)
 // When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || ''
 // Public URL of the Mini App (used in the bot's /start welcome button)
+async function setBotCommands() {
+  if (!BOT_TOKEN) return
+  try {
+    const res = await fetch(TG_API('setMyCommands'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commands: [
+          { command: 'start', description: 'Запустить Tempo ⚡' },
+          { command: 'app', description: 'Открыть приложение' },
+          { command: 'plans', description: 'Тарифы и оплата' },
+          { command: 'help', description: 'Справка и команды' }
+        ]
+      })
+    })
+    if (res.ok) console.log('[tempo] bot commands registered')
+  } catch (e) { console.warn('[tempo] setMyCommands failed:', e?.message) }
+}
 const APP_URL = process.env.APP_URL || 'https://tempo-lifeos.pplx.app'
 const DATA_FILE = new URL('./data.json', import.meta.url).pathname
+const BACKUP_FILE = new URL('./data.backup.json', import.meta.url).pathname
 const TG_API = (m) => `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
 
 // Stars prices (XTR) — must match src/lib/billing.ts
@@ -40,9 +59,19 @@ const EUR = { plus: { monthly: 4.99, annual: 49.9 }, pro: { monthly: 8.99, annua
 let db = { users: {}, accounts: {}, sessions: {} }
 try {
   db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
-  db.accounts = db.accounts || {}
-  db.sessions = db.sessions || {}
-} catch { /* first run */ }
+} catch (e) {
+  // main data file missing/corrupt — recover from the rotating backup
+  try {
+    db = JSON.parse(fs.readFileSync(BACKUP_FILE, 'utf8'))
+    fs.writeFileSync(DATA_FILE, JSON.stringify(db))
+    console.log('[tempo] data.json restored from backup')
+  } catch {
+    console.warn('[tempo] no data and no backup — starting fresh')
+  }
+}
+db.accounts = db.accounts || {}
+db.users = db.users || {}
+db.sessions = db.sessions || {}
 
 // ---------- admin seed ----------
 // Admin: username "Mister", password REQUIRED from env ADMIN_PASS (no default —
@@ -65,15 +94,32 @@ if (ADMIN_PASS && !db.accounts[ADMIN_USER.toLowerCase()]) {
   db.accounts[ADMIN_USER.toLowerCase()] = accountObj(ADMIN_USER, ADMIN_PASS, 'admin', ADMIN_TG)
   fs.writeFileSync(DATA_FILE, JSON.stringify(db))
 }
+// keep the admin password in sync with the env on EVERY startup, so the
+// current ADMIN_PASS value always works even for an old seeded account
+if (ADMIN_PASS && db.accounts[ADMIN_USER.toLowerCase()]) {
+  const adm = db.accounts[ADMIN_USER.toLowerCase()]
+  const newSalt = crypto.randomBytes(16).toString('hex')
+  if (adm.hash !== hashPass(ADMIN_PASS, adm.salt)) {
+    adm.salt = newSalt
+    adm.hash = hashPass(ADMIN_PASS, newSalt)
+    fs.writeFileSync(DATA_FILE, JSON.stringify(db))
+    console.log('[tempo] admin password updated from ADMIN_PASS env')
+  }
+}
 if (!ADMIN_PASS) {
   console.warn('[tempo] ADMIN_PASS not set — admin panel is disabled (no admin account will exist)')
 }
 
 let saveTimer = null
+function persist(file, cb) {
+  fs.writeFile(file, JSON.stringify(db), cb)
+}
 function save() {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    fs.writeFile(DATA_FILE, JSON.stringify(db), () => {})
+    // write main file, then rotate a backup copy (data survives a crash
+    // mid-write or a partial deploy reset)
+    persist(DATA_FILE, () => persist(BACKUP_FILE, () => {}))
   }, 250)
 }
 function user(id) {
@@ -283,23 +329,83 @@ const server = http.createServer(async (req, res) => {
           save()
         }
       }
-      // reply with a welcome message and a button that opens the Mini App
+      // reply with the promo photo + welcome + a button that opens the Mini App
       if (BOT_TOKEN && body?.message?.chat?.id) {
+        const chatId = body.message.chat.id
+        const kb = { inline_keyboard: [[{ text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }]] }
+        const caption =
+          'Tempo — AI Life OS ⚡\nФинансы, календарь, задачи и питание в одном интерфейсе.\n\n' +
+          'Одно сообщение — и ИИ разложит всё по разделам:\n' +
+          '«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00»\n\n' +
+          'Команды: /app /plans /help'
+        if (APP_URL.startsWith('https')) {
+          fetch(TG_API('sendPhoto'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              photo: APP_URL + '/img/start.jpg',
+              caption,
+              reply_markup: kb
+            })
+          }).catch(() => {
+            // photo failed (e.g. not deployed yet) — fall back to text
+            fetch(TG_API('sendMessage'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: caption, reply_markup: kb })
+            }).catch(() => {})
+          })
+        } else {
+          fetch(TG_API('sendMessage'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: caption, reply_markup: kb })
+          }).catch(() => {})
+        }
+      }
+      return json(res, 200, { ok: true })
+    }
+
+    // --- bot commands: /app, /plans, /help ---
+    if (BOT_TOKEN && body?.message?.chat?.id && typeof body?.message?.text === 'string') {
+      const chatId = body.message.chat.id
+      const kb = { inline_keyboard: [[{ text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }]] }
+      const cmd = body.message.text.trim().split(/\s+/)[0]
+      if (cmd === '/app') {
         fetch(TG_API('sendMessage'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: body.message.chat.id,
-            text: 'Tempo — AI Life OS ⚡\nФинансы, календарь, задачи и питание в одном интерфейсе.\n\nОдно сообщение — и ИИ разложит всё по разделам:\n«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00»',
-            reply_markup: {
-              inline_keyboard: [[
-                { text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }
-              ]]
-            }
-          })
-        }).catch(() => { /* best effort */ })
+          body: JSON.stringify({ chat_id: chatId, text: 'Tempo — AI Life OS ⚡', reply_markup: kb })
+        }).catch(() => {})
+        return json(res, 200, { ok: true })
       }
-      return json(res, 200, { ok: true })
+      if (cmd === '/plans') {
+        const msg =
+          'Тарифы Tempo:\n\n' +
+          'Free — базовый функционал: 5 AI-сообщений в день\n' +
+          'Plus (€4.99/мес или 250 ⭐) — безлимит AI, все разделы\n' +
+          'Pro (€8.99/мес или 450 ⭐) — приоритетная поддержка + ранняя доступность новых функций\n\n' +
+          'Оплата картой и Telegram Stars — внутри приложения.'
+        fetch(TG_API('sendMessage'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
+        }).catch(() => {})
+        return json(res, 200, { ok: true })
+      }
+      if (cmd === '/help') {
+        const msg =
+          'Tempo — AI Life OS: финансы, календарь, задачи и питание.\n\n' +
+          '/start — начать работу\n/app — открыть приложение\n/plans — тарифы\n/help — эта справка\n\n' +
+          'Просто напишите боту, что произошло:\n«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00» — ИИ сам всё разложит по разделам.'
+        fetch(TG_API('sendMessage'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
+        }).catch(() => {})
+        return json(res, 200, { ok: true })
+      }
     }
     return json(res, 200, { ok: true })
   }
@@ -490,3 +596,5 @@ if (!BOT_TOKEN) {
   console.warn('[tempo] BOT_TOKEN not set — billing endpoints will reject requests (health stays up)')
 }
 server.listen(PORT, () => console.log(`[tempo] billing server on :${PORT}`))
+
+setBotCommands()

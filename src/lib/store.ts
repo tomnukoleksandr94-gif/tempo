@@ -6,6 +6,7 @@ import type {
 } from './types'
 import { uid, todayISO, addDays, parseISODate, monthKey, startOfWeekISO } from './utils'
 import { localStore, cloudStore, storageAvailable } from './storage'
+import { setDefaultLocale } from './i18n'
 import type { Validated } from './validate'
 import { aiLimitFor } from './billing'
 import type { PlanningTab } from '../pages/Planning'
@@ -25,7 +26,8 @@ const initialSettings: Settings = {
   kcalTarget: 2200,
   widgets: DEFAULT_WIDGETS,
   autoConfirm: false,
-  theme: 'dark'
+  theme: 'dark',
+  effects: true
 }
 
 /** Free until a payment is verified server-side. Never set locally. */
@@ -582,3 +584,7 @@ export function mealsMacros(meals: Meal[]) {
     { p: 0, c: 0, f: 0 }
   )
 }
+
+// keep the i18n default language in sync with the user's setting
+useStore.subscribe((s) => { if (s?.settings?.locale) setDefaultLocale(s.settings.locale) })
+setDefaultLocale(useStore.getState().settings.locale)

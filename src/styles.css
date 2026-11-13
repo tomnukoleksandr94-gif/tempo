@@ -400,3 +400,14 @@ input[type='time'].inp::-webkit-calendar-picker-indicator {
 .bd-soft { border-color: var(--line); }
 .bd-soft2 { border-color: var(--line2); }
 .surface { background: var(--s1); }
+
+
+/* ---------- user-toggled effects off: kill all animation/transition ---------- */
+.no-effects *,
+.no-effects *::before,
+.no-effects *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

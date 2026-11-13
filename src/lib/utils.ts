@@ -1,4 +1,10 @@
 import type { Currency } from './types'
+import { t } from './i18n'
+
+export const LOCALE_TAGS: Record<string, string> = {
+  ru: 'ru-RU', uk: 'uk-UA', en: 'en-GB', de: 'de-DE', fr: 'fr-FR'
+}
+const tag = (l: string) => LOCALE_TAGS[l] ?? 'en-GB'
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
@@ -31,21 +37,21 @@ export function startOfWeekISO(iso: string): string {
 
 export function weekdayShort(iso: string, locale: string): string {
   const d = parseISODate(iso)
-  return d.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-GB', { weekday: 'short' })
+  return d.toLocaleDateString(tag(locale), { weekday: 'short' })
 }
 
 export function fmtDate(iso: string, locale: string, style: 'short' | 'long' | 'day' = 'short'): string {
   const d = parseISODate(iso)
-  const loc = locale === 'ru' ? 'ru-RU' : 'en-GB'
+  const loc = tag(locale)
   if (style === 'long') return d.toLocaleDateString(loc, { day: 'numeric', month: 'long' })
   if (style === 'day') return d.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long' })
   return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' })
 }
 
-export function relativeDay(iso: string, locale: 'ru' | 'en', today = todayISO()): string {
-  if (iso === today) return locale === 'ru' ? 'сегодня' : 'today'
-  if (iso === addDays(today, 1)) return locale === 'ru' ? 'завтра' : 'tomorrow'
-  if (iso === addDays(today, -1)) return locale === 'ru' ? 'вчера' : 'yesterday'
+export function relativeDay(iso: string, locale: string, today = todayISO()): string {
+  if (iso === today) return t('c.today', locale)
+  if (iso === addDays(today, 1)) return t('c.tomorrow', locale)
+  if (iso === addDays(today, -1)) return t('c.yesterday', locale)
   return fmtDate(iso, locale)
 }
 
@@ -53,7 +59,7 @@ const CUR_SYMB: Record<Currency, string> = { EUR: '€', USD: '$', GBP: '£', UA
 
 export function money(amount: number, cur: Currency, locale: string, withSign = false): string {
   const sym = CUR_SYMB[cur] ?? cur
-  const v = Math.abs(amount).toLocaleString(locale === 'ru' ? 'ru-RU' : 'en-GB', {
+  const v = Math.abs(amount).toLocaleString(tag(locale), {
     minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     maximumFractionDigits: 2
   })
@@ -76,17 +82,11 @@ export function hashStr(s: string): string {
   return (h >>> 0).toString(36)
 }
 
-export function greeting(hour: number, locale: 'ru' | 'en'): string {
-  if (locale === 'ru') {
-    if (hour < 5) return 'Доброй ночи'
-    if (hour < 12) return 'Доброе утро'
-    if (hour < 18) return 'Добрый день'
-    return 'Добрый вечер'
-  }
-  if (hour < 5) return 'Good night'
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
+export function greeting(hour: number, locale: string): string {
+  if (hour < 5) return t('g.night', locale)
+  if (hour < 12) return t('g.morning', locale)
+  if (hour < 18) return t('g.day', locale)
+  return t('g.evening', locale)
 }
 
 export function download(filename: string, text: string) {

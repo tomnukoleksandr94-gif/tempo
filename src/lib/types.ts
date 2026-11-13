@@ -83,7 +83,7 @@ export interface CustomFood {
 
 export interface Settings {
   name: string
-  locale: 'ru' | 'en'
+  locale: 'ru' | 'uk' | 'en' | 'de' | 'fr'
   currency: Currency
   model: string
   apiKey: string
@@ -91,6 +91,7 @@ export interface Settings {
   widgets: string[]
   autoConfirm: boolean
   theme: 'auto' | 'dark' | 'light'
+  effects: boolean
 }
 
 // ---------- subscription & billing ----------
