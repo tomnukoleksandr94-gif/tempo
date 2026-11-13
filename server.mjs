@@ -188,7 +188,7 @@ db.sessions = db.sessions || {}
 // Admin: username "Mister", password REQUIRED from env ADMIN_PASS (no default —
 // fail closed: without the env the admin account simply never exists).
 // Bound to Telegram @neggshka. Credentials live ONLY on the server.
-const ADMIN_USER = 'Mister'
+const ADMIN_USER = process.env.ADMIN_USER || 'Mister'
 const ADMIN_PASS = process.env.ADMIN_PASS || ''
 const ADMIN_TG = process.env.ADMIN_TG || 'neggshka'
 function hashPass(password, salt) {
