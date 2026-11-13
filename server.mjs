@@ -20,16 +20,27 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import { generate, generateStream, systemPrompt, extractJson, MODEL_REGISTRY, TIERS, PLAN_TIERS } from './ai-router.mjs'
 
+// Telegram Bot API access. Two modes:
+// 1) BOT_TOKEN set directly → calls go straight to api.telegram.org (self-hosted).
+// 2) Credential proxy (managed hosting): CUSTOM_CRED_API_TELEGRAM_ORG_URL +
+//    CUSTOM_CRED_API_TELEGRAM_ORG_PROXY_AUTH_KEY are injected by the platform.
+//    Requests go to <URL>/api.telegram.org/<method> with x-api-key auth; the
+//    proxy injects the bot token server-side, so the token never reaches this
+//    process or its logs.
 const BOT_TOKEN = process.env.BOT_TOKEN || ''
+const TG_PROXY_URL = (process.env.CUSTOM_CRED_API_TELEGRAM_ORG_URL || '').replace(/\/$/, '')
+const TG_PROXY_KEY = process.env.CUSTOM_CRED_API_TELEGRAM_ORG_PROXY_AUTH_KEY || ''
+const TG_CRED = TG_PROXY_URL && TG_PROXY_KEY
+const TG_TOKEN_AVAIL = BOT_TOKEN || TG_CRED
 const PORT = Number(process.env.PORT || 3000)
 // Shared secret for the Telegram webhook (set via setWebhook secret_token).
 // When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || ''
 // Public URL of the Mini App (used in the bot's /start welcome button)
 async function setBotCommands() {
-  if (!BOT_TOKEN) return
+  if (!TG_TOKEN_AVAIL) return
   try {
-    const res = await fetch(TG_API('setMyCommands'), {
+    const res = await tgFetch('setMyCommands', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -44,10 +55,19 @@ async function setBotCommands() {
     if (res.ok) console.log('[tempo] bot commands registered')
   } catch (e) { console.warn('[tempo] setMyCommands failed:', e?.message) }
 }
-const APP_URL = process.env.APP_URL || 'https://tempo-lifeos.pplx.app'
+const APP_URL = process.env.APP_URL || 'https://tempo-lifeos-app.pplx.app'
 const DATA_FILE = new URL('./data.json', import.meta.url).pathname
 const BACKUP_FILE = new URL('./data.backup.json', import.meta.url).pathname
-const TG_API = (m) => `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
+const TG_API = (m) => TG_CRED
+  ? `${TG_PROXY_URL}/api.telegram.org/${m}`
+  : `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
+const tgFetch = async (method, opts = {}) => {
+  if (!TG_TOKEN_AVAIL) return null
+  const res = await fetch(TG_API(method), TG_CRED
+    ? { ...opts, headers: { ...(opts.headers || {}), 'x-api-key': TG_PROXY_KEY } }
+    : opts)
+  return res
+}
 
 // ---------- LiqPay (automatic bank-card payments) ----------
 // Checkout is hosted by LiqPay — the payer's card data never touches our
@@ -225,7 +245,7 @@ function user(id) {
 
 // ---------- Telegram initData verification ----------
 function verifyInitData(initData) {
-  if (!BOT_TOKEN) return null
+  if (!TG_TOKEN_AVAIL) return null
   try {
     const params = new URLSearchParams(initData)
     const hash = params.get('hash')
@@ -393,7 +413,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   if (req.url === '/api/health') {
-    return json(res, 200, { ok: true, billing: !!BOT_TOKEN })
+    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL })
   }
 
   // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
@@ -444,7 +464,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
       // reply with the promo photo + welcome + a button that opens the Mini App
-      if (BOT_TOKEN && body?.message?.chat?.id) {
+      if (TG_TOKEN_AVAIL && body?.message?.chat?.id) {
         const chatId = body.message.chat.id
         const kb = { inline_keyboard: [[{ text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }]] }
         const caption =
@@ -453,7 +473,7 @@ const server = http.createServer(async (req, res) => {
           '«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00»\n\n' +
           'Команды: /app /plans /help'
         if (APP_URL.startsWith('https')) {
-          fetch(TG_API('sendPhoto'), {
+          tgFetch('sendPhoto', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -464,14 +484,14 @@ const server = http.createServer(async (req, res) => {
             })
           }).catch(() => {
             // photo failed (e.g. not deployed yet) — fall back to text
-            fetch(TG_API('sendMessage'), {
+            tgFetch('sendMessage', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ chat_id: chatId, text: caption, reply_markup: kb })
             }).catch(() => {})
           })
         } else {
-          fetch(TG_API('sendMessage'), {
+          tgFetch('sendMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, text: caption, reply_markup: kb })
@@ -482,12 +502,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     // --- bot commands: /app, /plans, /help ---
-    if (BOT_TOKEN && body?.message?.chat?.id && typeof body?.message?.text === 'string') {
+    if (TG_TOKEN_AVAIL && body?.message?.chat?.id && typeof body?.message?.text === 'string') {
       const chatId = body.message.chat.id
       const kb = { inline_keyboard: [[{ text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }]] }
       const cmd = body.message.text.trim().split(/\s+/)[0]
       if (cmd === '/app') {
-        fetch(TG_API('sendMessage'), {
+        tgFetch('sendMessage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: chatId, text: 'Tempo — AI Life OS ⚡', reply_markup: kb })
@@ -503,7 +523,7 @@ const server = http.createServer(async (req, res) => {
           (promoActive() ? '\n🎁 Скидка TEMPO3: −€3 на первый платёж до 5 декабря 2026 — применяется автоматически при оплате.' : '') +
           '\nОплата картой и Telegram Stars — внутри приложения.'
         if (APP_URL.startsWith('https')) {
-          fetch(TG_API('sendPhoto'), {
+          tgFetch('sendPhoto', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -513,14 +533,14 @@ const server = http.createServer(async (req, res) => {
               reply_markup: kb
             })
           }).catch(() => {
-            fetch(TG_API('sendMessage'), {
+            tgFetch('sendMessage', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
             }).catch(() => {})
           })
         } else {
-          fetch(TG_API('sendMessage'), {
+          tgFetch('sendMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
@@ -534,7 +554,7 @@ const server = http.createServer(async (req, res) => {
           '/start — начать работу\n/app — открыть приложение\n/plans — тарифы\n/help — эта справка\n\n' +
           'Просто напишите боту, что произошло:\n«Потратил 18 евро на обед, курица с рисом, завтра встреча в 15:00» — ИИ сам всё разложит по разделам.'
         if (APP_URL.startsWith('https')) {
-          fetch(TG_API('sendPhoto'), {
+          tgFetch('sendPhoto', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -544,14 +564,14 @@ const server = http.createServer(async (req, res) => {
               reply_markup: kb
             })
           }).catch(() => {
-            fetch(TG_API('sendMessage'), {
+            tgFetch('sendMessage', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
             }).catch(() => {})
           })
         } else {
-          fetch(TG_API('sendMessage'), {
+          tgFetch('sendMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, text: msg, reply_markup: kb })
@@ -801,7 +821,7 @@ const server = http.createServer(async (req, res) => {
     const stars = firstStars(body.plan, period, r.u)
     const eur = firstPrice(body.plan, period, r.u)
     const payload = JSON.stringify({ userId, plan: body.plan, period, promo: promo ? 1 : 0 })
-    const inv = await fetch(TG_API('createInvoiceLink'), {
+    const inv = await tgFetch('createInvoiceLink', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1058,8 +1078,8 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: 'not found' })
 })
 
-if (!BOT_TOKEN) {
-  console.warn('[tempo] BOT_TOKEN not set — billing endpoints will reject requests (health stays up)')
+if (!TG_TOKEN_AVAIL) {
+  console.warn('[tempo] no Telegram credentials — billing endpoints will reject requests (health stays up)')
 }
 server.listen(PORT, () => console.log(`[tempo] billing server on :${PORT}`))
 
