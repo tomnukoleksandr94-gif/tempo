@@ -18,6 +18,10 @@
 const GEMINI_KEY = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6KS3-aeHegpcdd_fE7hR75zeuuFpicMqetsnz3psd4ntg'
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const TIMEOUT_MS = 25_000
+// Inactivity window mid-stream: a healthy model streams chunks every few
+// hundred ms; 20s of silence means it stalled — abort, deliver the partial
+// text or fall back to the next model.
+const INACTIVITY_MS = 20_000
 
 // ---------- registry (only verified models; never invented names) ----------
 
@@ -188,7 +192,11 @@ export async function generateStream(opts, onDelta) {
   let lastErr = new AiRouterError('AI unavailable', 'busy')
   for (const model of chain) {
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+    // Sliding watchdog: fires if NO chunk arrives within the window — covers
+    // both a hung connect and a model that stalls mid-response. Any received
+    // chunk re-arms it, so a healthy stream is never aborted.
+    let timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+    const armWatchdog = () => { clearTimeout(timer); timer = setTimeout(() => ctrl.abort(), INACTIVITY_MS) }
     try {
       const res = await fetch(`${API}/${model}:streamGenerateContent?alt=sse`, {
         method: 'POST',
@@ -230,7 +238,8 @@ export async function generateStream(opts, onDelta) {
               .map((p) => p.text)
               .join('')
             if (chunk) {
-              if (first) { first = false; clearTimeout(timer) } // model responded — stop the connect-timeout
+              if (first) first = false
+              armWatchdog() // model is alive — re-arm the inactivity watchdog
               text += chunk
               onDelta(chunk)
             }
@@ -243,10 +252,15 @@ export async function generateStream(opts, onDelta) {
       clearTimeout(timer)
       if (e instanceof AiRouterError) throw e
       if (e?.name === 'AbortError') {
-        // if we already streamed something, a late abort means the client stopped — not an error
-        throw new AiRouterError('Timeout', 'timeout')
+        // watchdog fired. Partial text already streamed → deliver it (better
+        // than losing a mostly-complete answer); nothing streamed → this
+        // model hangs, fall back to the next one in the chain.
+        if (text.trim()) return { text, model, fellBack: model !== chain[0] }
+        lastErr = new AiRouterError('Timeout', 'timeout')
+        continue
       }
       lastErr = new AiRouterError(e?.message || 'Network error', 'network')
+      continue
     }
   }
   throw lastErr

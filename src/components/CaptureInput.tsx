@@ -1,13 +1,19 @@
 import { useRef, useState } from 'react'
-import { ArrowUp, Mic, MicOff, Camera, Sparkles } from 'lucide-react'
+import { ArrowUp, Mic, MicOff, Camera, Sparkles, Lock } from 'lucide-react'
 import { useT } from '../lib/hooks'
 import { useSpeechInput } from '../lib/hooks'
+import { useToast } from './ui'
 import { imageToB64 } from '../lib/utils'
 import { haptic } from '../lib/telegram'
+import { useStore } from '../lib/store'
+import { effectivePlan } from '../lib/billing'
 
 /**
  * Universal capture bar: text, voice (Web Speech API) and photo input.
  * Used by the Home quick capture and the AI assistant.
+ * Voice input and photo analysis are Plus/Pro features — for the free plan
+ * the buttons render with a lock and explain the upgrade path instead of
+ * letting the request fail server-side later.
  */
 export function CaptureInput({
   big = false,
@@ -23,9 +29,18 @@ export function CaptureInput({
   autoFocus?: boolean
 }) {
   const t = useT()
+  const toast = useToast()
+  const subscription = useStore((s) => s.subscription)
+  const plan = effectivePlan(subscription)
+  const aiPlus = plan === 'plus' || plan === 'pro'
   const [text, setText] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const { supported, listening, start, stop } = useSpeechInput()
+
+  const lockedHint = () => {
+    haptic('error')
+    toast(t('ai.planRequired'))
+  }
 
   const send = () => {
     const v = text.trim()
@@ -61,6 +76,7 @@ export function CaptureInput({
         <button
           aria-label="voice input"
           onClick={() => {
+            if (!aiPlus) return lockedHint()
             haptic('light')
             if (listening) {
               stop()
@@ -70,22 +86,25 @@ export function CaptureInput({
               start(setText)
             }
           }}
-          className={`press flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full ${
-            listening ? 'bg-red/20 text-red' : 'bg-soft2 text-t2'
+          className={`press relative flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full ${
+            listening ? 'bg-red/20 text-red' : aiPlus ? 'bg-soft2 text-t2' : 'bg-soft2 text-t3'
           }`}
         >
           {listening ? <Mic size={17} className="animate-pulse" /> : <Mic size={17} />}
+          {!aiPlus && <Lock size={9} className="absolute right-1.5 bottom-1.5 text-t3" />}
         </button>
       )}
       <button
         aria-label="photo input"
         onClick={() => {
+          if (!aiPlus) return lockedHint()
           haptic('light')
           fileRef.current?.click()
         }}
-        className={`press flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full bg-soft2 text-t2`}
+        className={`press relative flex ${big ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-full bg-soft2 ${aiPlus ? 'text-t2' : 'text-t3'}`}
       >
         <Camera size={17} />
+        {!aiPlus && <Lock size={9} className="absolute right-1.5 bottom-1.5 text-t3" />}
       </button>
       <button
         aria-label="send"

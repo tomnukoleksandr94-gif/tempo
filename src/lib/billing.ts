@@ -148,11 +148,11 @@ async function api(path: string, body?: object, timeoutMs = 8000): Promise<any> 
   }
 }
 
-/** one retry wrapper — the billing server can take a moment to wake up */
+/** retry wrapper — the billing server can take a moment to wake up (cold start) */
 async function apiWithRetry(path: string, body?: object) {
   let res = await api(path, body)
-  if (res && (res.error === 'timeout' || res.error === 'network')) {
-    await new Promise((r) => setTimeout(r, 1500))
+  for (let attempt = 0; attempt < 2 && res && (res.error === 'timeout' || res.error === 'network'); attempt++) {
+    await new Promise((r) => setTimeout(r, 1500 + attempt * 1500))
     res = await api(path, body)
   }
   return res

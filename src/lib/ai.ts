@@ -238,9 +238,22 @@ async function serverChatStream(opts: ServerChatOpts): Promise<{ text: string; m
   let text = ''
   let meta: AiMeta | null = null
   let err: AiError | null = null
+  // Client-side stall watchdog: if the stream goes silent (server dead or model
+  // hung), abort instead of spinning forever — the UI shows an error + retry.
+  const stallCtrl = new AbortController()
+  let stallTimer: ReturnType<typeof setTimeout> | null = null
+  const armStall = () => { if (stallTimer) clearTimeout(stallTimer); stallTimer = setTimeout(() => stallCtrl.abort(), 30_000) }
+  armStall()
+  opts.signal?.addEventListener('abort', () => stallCtrl.abort(), { once: true })
+  try {
   for (;;) {
-    const { done, value } = await reader.read()
+    const read = await Promise.race([
+      reader.read(),
+      new Promise<never>((_, rej) => stallCtrl.signal.addEventListener('abort', () => rej(new DOMException('stall', 'AbortError')), { once: true }))
+    ])
+    const { done, value } = read
     if (done) break
+    armStall()
     buf += decoder.decode(value, { stream: true })
     const lines = buf.split('\n')
     buf = lines.pop() || ''
@@ -262,6 +275,17 @@ async function serverChatStream(opts: ServerChatOpts): Promise<{ text: string; m
         err = new AiError(ev.message || 'AI error', ev.code === 'quota' ? 'quota' : ev.code === 'timeout' ? 'timeout' : 'unavailable')
       }
     }
+  }
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      try { await reader.cancel() } catch { /* ignore */ }
+      // user pressed Stop — keep partial text; stream stalled — timeout error
+      if (text.trim()) return { text, meta: meta ?? { model: '', tier: opts.tier, fellBack: false, downgraded: false, usage: { date: '', count: 0, limit: 0 } } }
+      throw new AiError('Відповідь надто довго не приходила — спробуйте ще раз або виберіть швидшу модель', 'timeout')
+    }
+    throw e
+  } finally {
+    if (stallTimer) clearTimeout(stallTimer)
   }
   if (err) throw err
   if (!text.trim()) throw new AiError('Empty AI response', 'parse')

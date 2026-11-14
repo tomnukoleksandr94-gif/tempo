@@ -1085,6 +1085,11 @@ if (!TG_TOKEN_AVAIL) {
 }
 server.listen(PORT, () => console.log(`[tempo] billing server on :${PORT}`))
 
+// Keep the process alive through unexpected async errors: a single failed
+// request must never take the whole billing/AI backend down with it.
+process.on('uncaughtException', (e) => console.warn('[tempo] uncaughtException (kept alive):', e?.message))
+process.on('unhandledRejection', (e) => console.warn('[tempo] unhandledRejection (kept alive):', e?.message || e))
+
 setBotCommands()
 
 // Startup probe: verify the Telegram API actually answers with our auth.
