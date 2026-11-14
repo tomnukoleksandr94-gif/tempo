@@ -155,9 +155,14 @@ try {
   const anon = await post('/api/ai/usage', { tzMinutes: 60 })
   ok('anonymous usage 0/10', anon.status === 200 && anon.json.count === 0 && anon.json.limit === 10, JSON.stringify(anon.json))
 
-  console.log('== timezone reset check (UTC+13 → different day) ==')
-  const usage2 = await post('/api/ai/usage', { token, tzMinutes: 780 })
-  ok('tz +13h sees a fresh day (count 0)', usage2.json.count === 0, JSON.stringify(usage2.json))
+  console.log('== timezone reset check (per-user local day) ==')
+  // UTC+13 and UTC-11 are ALWAYS different calendar days, so exactly one of
+  // them is the day the 10 requests were made on (count 10) and the other is
+  // fresh (count 0) — deterministic at any hour of the day.
+  const u13 = await post('/api/ai/usage', { token, tzMinutes: 780 })
+  const u11 = await post('/api/ai/usage', { token, tzMinutes: -660 })
+  ok('tz +13 and tz -11 are different local days', u13.json.date !== u11.json.date, JSON.stringify([u13.json, u11.json]))
+  ok('the other local day is fresh (count 0)', (u13.json.count === 0) !== (u11.json.count === 0), JSON.stringify([u13.json, u11.json]))
 } finally {
   server.kill('SIGTERM')
   await new Promise((r) => setTimeout(r, 300))
