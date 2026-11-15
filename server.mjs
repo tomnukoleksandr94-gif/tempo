@@ -419,7 +419,7 @@ function corsOrigin(req) {
     const reqHost = req.headers.host
     if (o.host === reqHost) return origin // same origin as this API
     if (appHost && o.host === appHost) return origin
-    if (/^localhost:\d+$/.test(o.host) || o.host === '127.0.0.1') return origin
+    if (/^localhost:\d+$/.test(o.host) || /^127\.0\.0\.1(:\d+)?$/.test(o.host)) return origin
     if (o.hostname.endsWith('.pplx.app') && o.protocol === 'https:') return origin // platform preview hosts
   } catch { return null }
   return null

@@ -121,6 +121,7 @@ export default function Assistant() {
             e?.code === 'auth' ? t('pr.apiKeyHint', locale) :
             e?.code === 'quota' ? t('ai.quota', locale) :
             e?.code === 'timeout' ? t('ai.timeout', locale) :
+            e?.code === 'config' ? t('ai.serverConfig', locale) :
             t('err.ai', locale)
           pushChat({ id: uid(), role: 'ai', text: msg, ts: Date.now(), error: true })
         }

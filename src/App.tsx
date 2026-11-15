@@ -1,5 +1,5 @@
 import { LOCALE_TAGS } from './lib/utils'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Home as HomeIcon, Sparkles, Wallet, CalendarRange, CreditCard, UserRound
 } from 'lucide-react'
@@ -8,12 +8,12 @@ import { useStore, eventOccursOn } from './lib/store'
 import { t } from './lib/i18n'
 import { haptic, tg, isTelegram } from './lib/telegram'
 import HomePage from './pages/Home'
-import Assistant from './pages/Assistant'
-import Finance from './pages/Finance'
-import PlanningPage from './pages/Planning'
-import Profile from './pages/Profile'
-import BillingPage from './pages/Billing'
-import SupportPage from './pages/Support'
+const Assistant = lazy(() => import('./pages/Assistant'))
+const Finance = lazy(() => import('./pages/Finance'))
+const PlanningPage = lazy(() => import('./pages/Planning'))
+const Profile = lazy(() => import('./pages/Profile'))
+const BillingPage = lazy(() => import('./pages/Billing'))
+const SupportPage = lazy(() => import('./pages/Support'))
 import { SuccessOverlay } from './components/SuccessOverlay'
 import { Onboarding } from './components/Onboarding'
 import { GlobalSearch } from './components/GlobalSearch'
@@ -297,13 +297,15 @@ export default function App() {
         <Sidebar tab={tab} go={go} />
         <main className="pt-island min-w-0 flex-1 px-4 pb-nav md:px-8 md:pb-10">
           <div key={tab} className="page-enter">
-            {tab === 'home' && <HomePage go={go} />}
-            {tab === 'ai' && <Assistant />}
-            {tab === 'finance' && <Finance />}
-            {tab === 'planning' && <PlanningPage />}
-            {tab === 'billing' && <BillingPage go={go} />}
-            {tab === 'support' && <SupportPage go={go} />}
-            {tab === 'profile' && <Profile go={go} />}
+            <Suspense fallback={<div className="flex h-[50vh] items-center justify-center"><LogoMark size={30} /></div>}>
+              {tab === 'home' && <HomePage go={go} />}
+              {tab === 'ai' && <Assistant />}
+              {tab === 'finance' && <Finance />}
+              {tab === 'planning' && <PlanningPage />}
+              {tab === 'billing' && <BillingPage go={go} />}
+              {tab === 'support' && <SupportPage go={go} />}
+              {tab === 'profile' && <Profile go={go} />}
+            </Suspense>
           </div>
         </main>
         <TabBar tab={tab} go={go} />

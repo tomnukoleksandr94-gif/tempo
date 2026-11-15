@@ -91,7 +91,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
         <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-t3" />
         <input
           ref={inputRef}
-          className="inp h-11 w-full pl-10 pr-10"
+          className="inp h-11 w-full" style={{ paddingLeft: 44, paddingRight: 44 }}
           placeholder={t2('search.placeholder')}
           value={q}
           onChange={(e) => setQ(e.target.value)}

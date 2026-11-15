@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   User, Languages, Coins, Sparkles, Target, LayoutGrid, Database,
   Download, Upload, Trash2, ShieldCheck, Crown
@@ -16,8 +16,89 @@ import { t } from '../lib/i18n'
 import { download } from '../lib/utils'
 import type { Currency } from '../lib/types'
 import { LogoMark } from '../App'
+import { Smartphone, Globe, Send } from 'lucide-react'
 
 const CURRENCIES: Currency[] = ['EUR', 'USD', 'GBP', 'UAH', 'PLN', 'RUB']
+
+const APP_URL = 'https://tempo-lifeos-app.pplx.app'
+const BOT_URL = 'https://t.me/Tempo00Bot'
+
+/** "App" section: install as PWA / open web / open in Telegram. */
+function InstallAppSection() {
+  const t2 = useT()
+  const [promptEvent, setPromptEvent] = useState<any>(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    try {
+      setInstalled(window.matchMedia('(display-mode: standalone)').matches)
+    } catch { /* ignore */ }
+    const onPrompt = (e: any) => {
+      e.preventDefault()
+      setPromptEvent(e)
+    }
+    const onInstalled = () => { setInstalled(true); setPromptEvent(null) }
+    window.addEventListener('beforeinstallprompt', onPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  const install = async () => {
+    if (promptEvent) {
+      promptEvent.prompt()
+      const res = await promptEvent.userChoice?.catch?.(() => null)
+      if (res?.outcome === 'accepted') setInstalled(true)
+    } else {
+      try {
+        window.open(APP_URL, '_blank')
+      } catch { /* ignore */ }
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <SectionHeader title={t2('pr.app')} />
+      <div className="glass p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-acc2">
+              <LogoMark size={22} />
+            </div>
+            <div className="text-[13px] font-semibold text-t2">Tempo</div>
+          </div>
+          <Btn variant="ghost" onClick={install}>
+            <Smartphone size={15} />
+            {installed ? t2('pr.appInstalled') : promptEvent ? t2('pr.appInstall') : t2('pr.appInstall')}
+          </Btn>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <a
+            href={APP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="press flex flex-1 items-center justify-center gap-1.5 rounded-xl border bd-soft bg-soft px-3 py-2 text-[13px] font-semibold text-t2"
+          >
+            <Globe size={14} className="text-acc" />
+            {t2('pr.appWeb')}
+          </a>
+          <a
+            href={BOT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="press flex flex-1 items-center justify-center gap-1.5 rounded-xl border bd-soft bg-soft px-3 py-2 text-[13px] font-semibold text-t2"
+          >
+            <Send size={14} className="text-acc" />
+            {t2('pr.appTg')}
+          </a>
+        </div>
+        <p className="mt-3 text-[11px] leading-snug text-t3">{t2('pr.appIosHint')}</p>
+      </div>
+    </div>
+  )
+}
 
 const WIDGETS: { id: string; key: string }[] = [
   { id: 'overview', key: 'home.spendToday' },
@@ -204,6 +285,8 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
 
       <SectionHeader title={t2('acc.title')} />
       <AccountSection />
+
+      <InstallAppSection />
 
       <button onClick={() => go && go('support')} className="glass lift press mt-4 flex w-full items-center gap-3 p-4 text-left">
         <Headset size={17} className="text-acc" />

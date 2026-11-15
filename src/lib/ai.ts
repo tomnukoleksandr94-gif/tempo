@@ -56,7 +56,7 @@ export const DEFAULT_PREFS: AiPrefs = {
 export class AiError extends Error {
   constructor(
     message: string,
-    public code: 'network' | 'auth' | 'quota' | 'parse' | 'busy' | 'timeout' | 'limit' | 'plan' | 'unavailable'
+    public code: 'network' | 'auth' | 'quota' | 'parse' | 'busy' | 'timeout' | 'limit' | 'plan' | 'unavailable' | 'config'
   ) {
     super(message)
   }
@@ -185,11 +185,17 @@ async function serverChat(opts: ServerChatOpts): Promise<{ json: any; meta: AiMe
     signal: opts.signal
   })
   if (!res.ok) {
-    let detail = ''
-    try { detail = (await res.json())?.message || '' } catch { /* ignore */ }
+    let parsed: any = null
+    try { parsed = await res.json() } catch { /* ignore */ }
+    const detail: string = parsed?.message || ''
     if (res.status === 429) throw new AiError(detail || 'Daily limit reached', 'limit')
     if (res.status === 403) throw new AiError(detail || 'Upgrade required', 'plan')
-    if (res.status === 502 || res.status === 503) throw new AiError(detail || 'AI unavailable', 'unavailable')
+    if (res.status === 502 || res.status === 503) {
+      // pass through server config/auth failures so the UI shows the localized hint
+      if (parsed?.error === 'config') throw new AiError(detail || 'AI unavailable', 'config')
+      if (parsed?.error === 'auth') throw new AiError(detail || 'AI unavailable', 'auth')
+      throw new AiError(detail || 'AI unavailable', 'unavailable')
+    }
     throw new AiError(detail || `HTTP ${res.status}`, 'network')
   }
   const json = await res.json()
@@ -226,10 +232,19 @@ async function serverChatStream(opts: ServerChatOpts): Promise<{ text: string; m
     signal: opts.signal
   })
   if (!res.ok || !res.body) {
-    let detail = ''
-    try { detail = (await res.json())?.message || '' } catch { /* ignore */ }
+    let parsed: any = null
+    try { parsed = await res.json() } catch { /* ignore */ }
+    const detail: string = parsed?.message || ''
     if (res.status === 429) throw new AiError(detail || 'Daily limit reached', 'limit')
     if (res.status === 403) throw new AiError(detail || 'Upgrade required', 'plan')
+    if (res.status === 503 || res.status === 502) {
+      // 'config' → AI not set up on the server; 'auth' → server key rejected.
+      // Both render a localized, actionable message in the chat UI.
+      let code: AiError['code'] = 'unavailable'
+      if (parsed?.error === 'config') code = 'config'
+      if (parsed?.error === 'auth') code = 'auth'
+      throw new AiError(detail || 'AI server unavailable', code)
+    }
     throw new AiError(detail || 'AI server unavailable', 'unavailable')
   }
   const reader = res.body.getReader()
