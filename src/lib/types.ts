@@ -109,6 +109,8 @@ export interface Settings {
   theme: 'auto' | 'dark' | 'light'
   effects: boolean
   eventReminders?: boolean
+  /** first-run onboarding completed */
+  onboarded?: boolean
 }
 
 // ---------- subscription & billing ----------

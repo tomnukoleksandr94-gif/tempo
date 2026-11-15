@@ -36,6 +36,7 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
   const setSettings = useStore((s) => s.setSettings)
   const usage = useStore((s) => s.aiUsage)
   const exportJson = useStore((s) => s.exportJson)
+  const exportCsv = useStore((s) => s.exportCsv)
   const importJson = useStore((s) => s.importJson)
   const clearAll = useStore((s) => s.clearAll)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -250,6 +251,18 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
             }}
           >
             <Download size={14} /> JSON
+          </Btn>
+        </Row>
+        <Row label={t2('pr.exportCsv')}>
+          <Btn
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              download(`tempo-transactions-${new Date().toISOString().slice(0, 10)}.csv`, exportCsv(), 'text/csv')
+              toast(t2('c.done'), 'ok')
+            }}
+          >
+            <Download size={14} /> CSV
           </Btn>
         </Row>
         <Row label={t2('pr.import')}>

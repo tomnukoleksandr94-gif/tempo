@@ -10,13 +10,18 @@
  *   gemini-3.8-flash, gemini-3.7-flash, gemini-3.6-flash, gemini-flash-latest,
  *   gemma-4-31b-it (17s, ignores system instructions).
  *
- * The API key lives ONLY on the server (env GEMINI_API_KEY, with an embedded
- * fallback key for the zero-config pilot deployment). It is never shipped to
- * the client bundle.
+ * SECURITY: the API key lives ONLY in the server environment variable
+ * GEMINI_API_KEY. There is NO embedded fallback key — an exposed key that was
+ * once committed to this public repository is treated as compromised and was
+ * removed. If the env is missing, every AI call fails with a clear
+ * configuration error ('config') instead of silently using a public key.
  */
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6KS3-aeHegpcdd_fE7hR75zeuuFpicMqetsnz3psd4ntg'
+const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
+
+/** Whether the server has a Gemini key configured (health/UI reporting). */
+export const aiConfigured = () => !!GEMINI_KEY
 const TIMEOUT_MS = 25_000
 // Inactivity window mid-stream: a healthy model streams chunks every few
 // hundred ms; 20s of silence means it stalled — abort, deliver the partial
@@ -89,7 +94,17 @@ export const PLAN_TIERS = {
 export class AiRouterError extends Error {
   constructor(message, code) {
     super(message)
-    this.code = code // 'network' | 'auth' | 'quota' | 'parse' | 'busy' | 'timeout' | 'bad_request'
+    this.code = code // 'network' | 'auth' | 'quota' | 'parse' | 'busy' | 'timeout' | 'bad_request' | 'config'
+  }
+}
+
+/** Fail fast with a clear configuration error when the key is missing. */
+function requireKey() {
+  if (!GEMINI_KEY) {
+    throw new AiRouterError(
+      'GEMINI_API_KEY is not configured on the server. Set it in the hosting environment (see .env.example).',
+      'config'
+    )
   }
 }
 
@@ -116,6 +131,7 @@ function buildBody({ parts, system, tier, prefs, jsonMode }) {
 
 /** Non-streaming generation with automatic fallback. Returns {text, model, fellBack}. */
 export async function generate(opts) {
+  requireKey()
   const chain = chainFor(opts.tier)
   let lastErr = new AiRouterError('AI unavailable', 'busy')
   for (const model of chain) {
@@ -188,6 +204,7 @@ function tierOfModel(model, requestedTier) {
  * the first chunk (mid-stream failures surface as an error to the caller).
  */
 export async function generateStream(opts, onDelta) {
+  requireKey()
   const chain = chainFor(opts.tier)
   let lastErr = new AiRouterError('AI unavailable', 'busy')
   for (const model of chain) {
@@ -346,10 +363,13 @@ const FINANCE_RULES = `You generate a SHORT personal finance report (max 4 sente
 
 export function systemPrompt(mode, context, prefs, locale) {
   const ctx = typeof context === 'string' ? context : JSON.stringify(context || {})
-  const lang = locale && locale !== 'ru' ? `\nUser language: ${locale}.` : ''
-  if (mode === 'action') return ACTION_RULES.replace('{CONTEXT}', ctx).replace('{PREFS}', prefsToPrompt(prefs))
-  if (mode === 'insight') return INSIGHT_RULES.replace('{CONTEXT}', ctx)
-  if (mode === 'finance') return FINANCE_RULES.replace('{CONTEXT}', ctx)
+  // Language directive for EVERY mode (chat, action, insight, finance) — the
+  // assistant must never silently fall back to Russian when the user picked
+  // another language.
+  const lang = locale && locale !== 'ru' ? `\nIMPORTANT: The user's interface language is "${locale}". Reply in ${locale}. Do not reply in Russian unless the user writes in Russian.` : ''
+  if (mode === 'action') return ACTION_RULES.replace('{CONTEXT}', ctx).replace('{PREFS}', prefsToPrompt(prefs)) + lang
+  if (mode === 'insight') return INSIGHT_RULES.replace('{CONTEXT}', ctx) + lang
+  if (mode === 'finance') return FINANCE_RULES.replace('{CONTEXT}', ctx) + lang
   return CHAT_RULES.replace('{CONTEXT}', ctx).replace('{PREFS}', prefsToPrompt(prefs)) + lang
 }
 

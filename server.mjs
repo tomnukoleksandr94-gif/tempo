@@ -18,7 +18,7 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
-import { generate, generateStream, systemPrompt, extractJson, MODEL_REGISTRY, TIERS, PLAN_TIERS } from './ai-router.mjs'
+import { generate, generateStream, systemPrompt, extractJson, MODEL_REGISTRY, TIERS, PLAN_TIERS, aiConfigured } from './ai-router.mjs'
 
 // Telegram Bot API access. Two modes:
 // 1) BOT_TOKEN set directly → calls go straight to api.telegram.org (self-hosted).
@@ -246,11 +246,18 @@ function user(id) {
 }
 
 // ---------- Telegram initData verification ----------
+function timingSafeEqualStr(a, b) {
+  const ba = Buffer.from(String(a))
+  const bb = Buffer.from(String(b))
+  if (ba.length !== bb.length) return false
+  return crypto.timingSafeEqual(ba, bb)
+}
 function verifyInitData(initData) {
-  if (!TG_TOKEN_AVAIL) return null
+  if (!TG_TOKEN_AVAIL || !BOT_TOKEN) return null // cryptographic verification REQUIRES the bot token
   try {
     const params = new URLSearchParams(initData)
     const hash = params.get('hash')
+    if (!hash) return null
     params.delete('hash')
     const dataCheckString = [...params.entries()]
       .map(([k, v]) => `${k}=${v}`)
@@ -258,10 +265,13 @@ function verifyInitData(initData) {
       .join('\n')
     const secret = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest()
     const computed = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex')
-    if (computed !== hash) return null
+    // timing-safe comparison (constant time)
+    if (!timingSafeEqualStr(computed, hash)) return null
     const u = JSON.parse(params.get('user'))
+    if (!u || !u.id) return null
     // auth_date freshness: reject tokens older than 24h
-    if (Date.now() / 1000 - Number(params.get('auth_date')) > 86400) return null
+    const authDate = Number(params.get('auth_date'))
+    if (!Number.isFinite(authDate) || Date.now() / 1000 - authDate > 86400) return null
     return u
   } catch {
     return null
@@ -297,7 +307,10 @@ function activate(userId, plan, period, payment) {
   u.period = period
   u.status = 'active'
   u.expiresAt = expires.toISOString()
-  u.autoRenew = true
+  // HONESTY: no automatic recurring billing is implemented (neither Telegram
+  // Stars nor LiqPay auto-charge). autoRenew stays false — the plan simply
+  // expires and the user pays again manually.
+  u.autoRenew = false
   if (payment) {
     u.payments[payment.chargeId] = { plan, period, ts: payment.ts, stars: payment.stars }
     u.history.unshift({ id: payment.chargeId, plan, period, stars: payment.stars, status: 'paid', ts: payment.ts })
@@ -333,7 +346,23 @@ function cleanSessions() {
   }
 }
 
-/** resolve user record from either initData (Telegram) or session token */
+// ---------- admin audit log (who did what, server-side) ----------
+function audit(adminUsername, action, detail) {
+  db.audit = db.audit || []
+  db.audit.unshift({ ts: Date.now(), admin: String(adminUsername || '?'), action, detail: detail || null })
+  db.audit = db.audit.slice(0, 200)
+  save()
+}
+
+/**
+ * Resolve user record from either initData (Telegram) or session token.
+ *
+ * SECURITY: Telegram accounts are bound to account records by the IMMUTABLE
+ * Telegram user ID (tgUserId), never by the mutable @username — renaming a
+ * Telegram account to a victim's username must not grant access to their data.
+ * Binding happens only via /api/account/link-telegram, which requires BOTH a
+ * valid account session AND a cryptographically verified initData.
+ */
 function resolveUser(body) {
   // 1) session token
   const acc = sessionAccount(body.token)
@@ -342,22 +371,22 @@ function resolveUser(body) {
   const tg = verifyInitData(body.initData || '')
   if (tg) {
     const rec = user(String(tg.id))
-    // auto-admin: the owner's Telegram account
-    if (tg.username && tg.username.toLowerCase() === ADMIN_TG) {
+    // auto-admin: the owner's Telegram account (bound by verified user ID,
+    // with the owner's @username as a secondary confirmation — both must match)
+    if (tg.username && String(tg.username).toLowerCase() === ADMIN_TG) {
       const admin = db.accounts[ADMIN_USER.toLowerCase()]
       if (admin && rec !== user(admin.userId)) {
         // link owner's telegram usage to the admin account record
         return { u: user(admin.userId), acc: admin, via: 'telegram-admin' }
       }
     }
-    // link telegram login to an account with same username (first time only)
-    if (!rec.accountLinked && tg.username) {
-      const acc = Object.values(db.accounts).find((a) => a.tgUsername && a.tgUsername.toLowerCase() === tg.username.toLowerCase())
-      if (acc) {
-        // migrate this telegram user's data to the account record
+    // link telegram login to an account bound to this verified Telegram user ID
+    if (!rec.accountLinked) {
+      const bound = Object.values(db.accounts).find((a) => a.tgUserId && String(a.tgUserId) === String(tg.id))
+      if (bound) {
         rec.accountLinked = true
         save()
-        return { u: user(acc.userId), acc, via: 'telegram' }
+        return { u: user(bound.userId), acc: bound, via: 'telegram' }
       }
     }
     return { u: rec, acc: null, via: 'telegram' }
@@ -378,22 +407,65 @@ function publicState(u) {
 }
 
 // ---------- HTTP ----------
+// Strict CORS allow-list: the app origin (APP_URL), the same host that serves
+// this API (same-origin deployments), and localhost for local development.
+// Never a wildcard for authenticated API responses.
+function corsOrigin(req) {
+  const origin = req.headers.origin
+  if (!origin) return null
+  try {
+    const o = new URL(origin)
+    const appHost = (() => { try { return new URL(APP_URL).host } catch { return null } })()
+    const reqHost = req.headers.host
+    if (o.host === reqHost) return origin // same origin as this API
+    if (appHost && o.host === appHost) return origin
+    if (/^localhost:\d+$/.test(o.host) || o.host === '127.0.0.1') return origin
+    if (o.hostname.endsWith('.pplx.app') && o.protocol === 'https:') return origin // platform preview hosts
+  } catch { return null }
+  return null
+}
 function json(res, code, obj) {
-  res.writeHead(code, {
+  const req = res.req // Node attaches the request to the response
+  const headers = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-  })
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    // security headers on every API response
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'X-XSS-Protection': '0',
+    'Cache-Control': 'no-store'
+  }
+  const origin = corsOrigin(req)
+  if (origin) {
+    headers['Access-Control-Allow-Origin'] = origin
+    headers['Vary'] = 'Origin'
+  } else {
+    // no Origin header (curl, server-to-server, same-origin fetch) — no CORS needed
+    headers['Access-Control-Allow-Origin'] = 'null'
+  }
+  res.writeHead(code, headers)
   res.end(JSON.stringify(obj))
 }
-function readBody(req) {
-  return new Promise((resolve) => {
+/** Read a JSON body with a hard size cap (default 12 MB — AI photos included). */
+function readBody(req, limitBytes = 12 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
     let raw = ''
-    req.on('data', (c) => (raw += c))
+    let aborted = false
+    req.on('data', (c) => {
+      raw += c
+      if (raw.length > limitBytes && !aborted) {
+        aborted = true
+        resolve({ __tooLarge: true })
+        req.destroy() // oversized upload — stop reading
+      }
+    })
     req.on('end', () => {
+      if (aborted) return
       try { resolve(JSON.parse(raw || '{}')) } catch { resolve({}) }
     })
+    req.on('error', () => { if (!aborted) resolve({}) })
   })
 }
 
@@ -411,11 +483,36 @@ function rateLimited(ip) {
   return false
 }
 
+// ---------- burst rate limit for the AI endpoint (30 requests / minute / IP) ----------
+const aiHits = new Map()
+function aiRateLimited(ip) {
+  const now = Date.now()
+  const hits = (aiHits.get(ip) || []).filter((t) => now - t < 60_000)
+  if (hits.length >= 30) {
+    aiHits.set(ip, hits)
+    return true
+  }
+  hits.push(now)
+  aiHits.set(ip, hits)
+  return false
+}
+
+/** Refund a charged AI request (server/provider failure must not consume quota). */
+function refundUsage(u, charged) {
+  if (!u || !charged) return
+  try {
+    if (u.aiUsage && u.aiUsage.date === charged.date && u.aiUsage.count > 0) {
+      u.aiUsage.count -= 1
+      save()
+    }
+  } catch { /* ignore */ }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   if (req.url === '/api/health') {
-    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL })
+    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured() })
   }
 
   // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
@@ -431,6 +528,21 @@ const server = http.createServer(async (req, res) => {
       const u = user(String(fromId))
       if (u.chatId !== chatId) { u.chatId = chatId; save() }
     }
+    // --- pre_checkout_query: Telegram requires an answer within 10 seconds or
+    // the payment fails. Validate the payload and approve/reject.
+    const pcq = body?.pre_checkout_query
+    if (pcq?.id) {
+      const payload = {}
+      try { Object.assign(payload, JSON.parse(pcq.invoice_payload || '{}')) } catch {}
+      const valid = payload.userId && STARS[payload.plan] && (payload.period === 'monthly' || payload.period === 'annual')
+      await tgFetch('answerPreCheckoutQuery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: !!valid, ...(valid ? {} : { error_message: 'Invalid invoice payload' }) })
+      }).catch(() => {})
+      return json(res, 200, { ok: true })
+    }
+
     const sp = body?.message?.successful_payment
     if (sp) {
       // verify with Telegram that the invoice belongs to our bot
@@ -585,7 +697,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true })
   }
 
-  // --- event reminders (delivered as Telegram messages) ---
+  // --- event reminders (stored here, DELIVERED by the scheduler below) ---
   if (req.url === '/api/reminders/sync' && req.method === 'POST') {
     const body = await readBody(req)
     const r = resolveUser(body)
@@ -594,8 +706,11 @@ const server = http.createServer(async (req, res) => {
       id: String(e.id || '').slice(0, 40),
       title: String(e.title || '').slice(0, 120),
       date: String(e.date || '').slice(0, 10),
-      time: String(e.time || '').slice(0, 5)
+      time: String(e.time || '').slice(0, 5),
+      remindMin: typeof e.remindMin === 'number' && e.remindMin >= 0 && e.remindMin <= 1440 ? Math.round(e.remindMin) : 60
     })) : []
+    // the user's timezone offset (minutes) — needed to compute real due times
+    if (typeof body.tzMinutes === 'number' && Math.abs(body.tzMinutes) <= 840) r.u.tzMinutes = Math.round(body.tzMinutes)
     r.u.reminders = events
     save()
     return json(res, 200, { ok: true })
@@ -612,7 +727,9 @@ const server = http.createServer(async (req, res) => {
     if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) return json(res, 400, { error: 'bad username' })
     if (password.length < 6) return json(res, 400, { error: 'bad password' })
     if (db.accounts[username.toLowerCase()]) return json(res, 409, { error: 'taken' })
-    const acc = accountObj(username, password, 'user', body.tgUsername || null)
+    // NOTE: tgUsername from the client is ignored — Telegram binding happens
+    // only via /api/account/link-telegram with a verified initData.
+    const acc = accountObj(username, password, 'user', null)
     db.accounts[username.toLowerCase()] = acc
     save()
     return json(res, 200, { token: createSession(acc.username), username: acc.username, role: acc.role })
@@ -623,7 +740,8 @@ const server = http.createServer(async (req, res) => {
     const username = String(body.username || '').trim().toLowerCase()
     const password = String(body.password || '')
     const acc = db.accounts[username]
-    if (!acc || hashPass(password, acc.salt) !== acc.hash) return json(res, 401, { error: 'invalid' })
+    // timing-safe credential check (same message for unknown user and wrong password)
+    if (!acc || !timingSafeEqualStr(hashPass(password, acc.salt), acc.hash)) return json(res, 401, { error: 'invalid' })
     return json(res, 200, { token: createSession(acc.username), username: acc.username, role: acc.role })
   }
 
@@ -634,6 +752,60 @@ const server = http.createServer(async (req, res) => {
       save()
     }
     return json(res, 200, { ok: true })
+  }
+
+  // --- link a Telegram account to a logged-in account (immutable user ID) ---
+  // Requires BOTH a valid account session AND a cryptographically verified
+  // Telegram initData. A mutable @username is never sufficient.
+  if (req.url === '/api/account/link-telegram' && req.method === 'POST') {
+    const body = await readBody(req)
+    const acc = sessionAccount(body.token)
+    if (!acc) return json(res, 401, { error: 'unauthorized' })
+    const tg = verifyInitData(body.initData || '')
+    if (!tg || !tg.id) return json(res, 400, { error: 'invalid initData' })
+    // one account per Telegram user
+    const taken = Object.values(db.accounts).find((a) => a.tgUserId && String(a.tgUserId) === String(tg.id) && a.username.toLowerCase() !== acc.username.toLowerCase())
+    if (taken) return json(res, 409, { error: 'telegram already linked to another account' })
+    acc.tgUserId = String(tg.id)
+    acc.tgUsername = tg.username || null
+    save()
+    return json(res, 200, { ok: true })
+  }
+
+  // --- self-service account deletion (GDPR) ---
+  // Requires the account password for confirmation. Deletes: credentials,
+  // sessions, personal cloud snapshot, reminders, support thread and usage
+  // records. Financial records (payments) are retained in aggregated form for
+  // legal/accounting reasons but the account becomes anonymous.
+  if (req.url === '/api/account/delete' && req.method === 'POST') {
+    const body = await readBody(req)
+    const acc = sessionAccount(body.token)
+    if (!acc) return json(res, 401, { error: 'unauthorized' })
+    // re-verify the password (explicit confirmation for a destructive action)
+    if (!body.password || !timingSafeEqualStr(hashPass(String(body.password), acc.salt), acc.hash)) {
+      return json(res, 403, { error: 'wrong password' })
+    }
+    const u = db.users[acc.userId]
+    if (u) {
+      // keep only anonymized financial history (legal retention), drop the rest
+      u.reminders = undefined
+      u.chatId = undefined
+      u.aiUsage = undefined
+      u.referrals = { invited: 0, paying: 0 }
+      u.referredBy = null
+      u.accountLinked = false
+    }
+    // revoke all sessions of this account
+    for (const [t, v] of Object.entries(db.sessions)) {
+      if (String(v.username).toLowerCase() === String(acc.username).toLowerCase()) delete db.sessions[t]
+    }
+    // remove the support thread
+    if (db.support) delete db.support[acc.userId]
+    // delete credentials + personal cloud snapshot
+    delete db.accounts[acc.username.toLowerCase()]
+    if (u) delete u.appData
+    save()
+    return json(res, 200, { ok: true, retained: 'anonymized financial records (legal retention)' })
   }
 
   // --- account data sync (view your data from any site) ---
@@ -691,9 +863,16 @@ const server = http.createServer(async (req, res) => {
   if (req.url === '/api/ai/chat' && req.method === 'POST') {
     const body = await readBody(req)
     const ip = req.socket.remoteAddress || 'x'
+    // burst protection (abuse of the anonymous/server path)
+    if (aiRateLimited(ip)) return json(res, 429, { error: 'rate', message: 'Too many AI requests — try again in a minute.' })
     const r = resolveUser(body)
     const u = r ? r.u : null
     const plan = r ? planOf(u) : 'free'
+
+    // fail fast with a clear configuration error when the server key is missing
+    if (!aiConfigured()) {
+      return json(res, 503, { error: 'config', message: 'AI is not configured on the server (GEMINI_API_KEY missing). Contact the administrator or add your own key in Profile → AI settings.' })
+    }
 
     // daily limit (server-side authority, reset by the user's timezone)
     const usage = usageOf(u, ip, body.tzMinutes)
@@ -742,9 +921,13 @@ const server = http.createServer(async (req, res) => {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
       'X-Accel-Buffering': 'no'
     }
+    const sseOrigin = corsOrigin(req)
+    if (sseOrigin) { sseHeaders['Access-Control-Allow-Origin'] = sseOrigin; sseHeaders['Vary'] = 'Origin' }
     const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
 
     try {
@@ -778,8 +961,11 @@ const server = http.createServer(async (req, res) => {
       }
     } catch (e) {
       const code = e?.code || 'network'
+      // a server/provider failure must NOT consume the user's daily quota
+      if (code !== 'limit' && code !== 'bad_request') refundUsage(u, charged)
       const message =
         code === 'auth' ? 'AI provider rejected the server key.' :
+        code === 'config' ? 'AI is not configured on the server (GEMINI_API_KEY missing).' :
         code === 'quota' ? 'AI provider quota exhausted — try again later.' :
         code === 'timeout' ? 'AI model timed out.' :
         code === 'busy' ? 'AI model busy — try again in a moment.' :
@@ -788,7 +974,7 @@ const server = http.createServer(async (req, res) => {
         send({ type: 'error', code, message })
         res.end()
       } else {
-        return json(res, code === 'auth' ? 502 : 503, { error: code, message })
+        return json(res, code === 'auth' || code === 'config' ? 502 : 503, { error: code, message })
       }
     }
     return
@@ -875,25 +1061,47 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { url: LIQPAY_URL + '?data=' + encodeURIComponent(data) + '&signature=' + encodeURIComponent(liqpaySign(data)), promo, amountEur: amount })
   }
 
-  // LiqPay server-to-server callback: verify signature, auto-activate on success
+  // LiqPay server-to-server callback: verify signature, auto-activate on
+  // VERIFIED production payments only.
   if (req.url === '/api/liqpay-callback' && req.method === 'POST') {
     const body = await readBody(req)
     const dataB64 = String(body?.data || '')
     const signature = String(body?.signature || '')
-    if (!dataB64 || !signature || signature !== liqpaySign(dataB64)) {
+    if (!dataB64 || !signature || !timingSafeEqualStr(signature, liqpaySign(dataB64))) {
       return json(res, 403, { error: 'bad signature' })
     }
     let ev = {}
     try { ev = JSON.parse(Buffer.from(dataB64, 'base64').toString('utf8')) } catch { return json(res, 400, { error: 'bad data' }) }
+    // Only a real 'success' status activates a subscription. 'sandbox' is
+    // accepted ONLY when the server runs explicitly in test mode
+    // (LIQPAY_SANDBOX=1) — a sandbox/fake status must never activate a
+    // production subscription.
+    const isTestEnv = process.env.LIQPAY_SANDBOX === '1'
+    const successStatus = isTestEnv ? (ev.status === 'success' || ev.status === 'sandbox') : ev.status === 'success'
     // order_id format: lp_<userId>_<plan>_<period>_<ts>
     const m = String(ev.order_id || '').match(/^lp_(.+)_(plus|pro)_(monthly|annual)_\d+$/)
-    if (m && (ev.status === 'success' || ev.status === 'sandbox')) {
+    if (m && successStatus) {
+      // REQUIRE a known pending order created by this server for this user
+      const order = (db.orders || {})[ev.order_id]
+      if (!order) {
+        return json(res, 400, { error: 'unknown order' })
+      }
+      // verify the order matches: user, plan, period, amount, currency
+      const amount = Number(ev.amount)
+      if (
+        String(order.userId) !== String(m[1]) ||
+        order.plan !== m[2] ||
+        order.period !== m[3] ||
+        !Number.isFinite(amount) || Math.abs(amount - order.amount) > 0.01 ||
+        (ev.currency && ev.currency !== 'EUR')
+      ) {
+        return json(res, 400, { error: 'order mismatch' })
+      }
       const u = user(m[1])
       // idempotency: skip if this exact order was already processed
       const seen = u.history.some((h) => h.id === ev.order_id)
       if (!seen) {
-        const order = (db.orders || {})[ev.order_id]
-        u.payments[ev.order_id] = { plan: m[2], period: m[3], ts: Date.now(), amount: order ? order.amount : undefined }
+        u.payments[ev.order_id] = { plan: m[2], period: m[3], ts: Date.now(), amount: order.amount }
         u.history.unshift({ id: ev.order_id, plan: m[2], period: m[3], stars: 0, status: 'paid', ts: Date.now() })
         u.history = u.history.slice(0, 50)
         const now = new Date()
@@ -903,8 +1111,9 @@ const server = http.createServer(async (req, res) => {
         u.plan = m[2]
         u.period = m[3]
         u.status = 'active'
+        u.autoRenew = false // honest: no automatic recurring billing is implemented
         // the launch discount applies to the first payment only
-        if (order && order.promo) u.promoUsed = true
+        if (order.promo) u.promoUsed = true
         rewardInviter(u)
         save()
       }
@@ -1013,6 +1222,7 @@ const server = http.createServer(async (req, res) => {
     if (!th || !text) return json(res, 400, { error: 'bad request' })
     th.messages.push({ from: 'admin', text, ts: Date.now() })
     th.messages = th.messages.slice(-100)
+    audit(r.acc?.username, 'support-reply', String(body.userId))
     save()
     return json(res, 200, { ok: true })
   }
@@ -1038,7 +1248,7 @@ const server = http.createServer(async (req, res) => {
       pendingCard: Object.values(db.users).reduce((a, u) => a + (u.history || []).filter((h) => h.status === 'pending_card').length, 0),
       supportUnread
     }
-    return json(res, 200, { users, accounts, totals })
+    return json(res, 200, { users, accounts, totals, audit: (db.audit || []).slice(0, 50) })
   }
 
   // grant a subscription manually (referral rewards, support)
@@ -1061,6 +1271,7 @@ const server = http.createServer(async (req, res) => {
     target.expiresAt = new Date(base.getTime() + days * 86400000).toISOString()
     target.history.unshift({ id: 'grant_' + Date.now(), plan, period: body.period || 'monthly', stars: 0, status: 'paid', ts: Date.now(), note: 'granted by admin' })
     rewardInviter(target)
+    audit(r.acc?.username, 'grant', `${plan}/${body.period || 'monthly'} → ${body.userId || body.username}`)
     save()
     return json(res, 200, { ok: true })
   }
@@ -1073,6 +1284,7 @@ const server = http.createServer(async (req, res) => {
     if (!target) return json(res, 404, { error: 'user not found' })
     target.status = 'expired'
     target.autoRenew = false
+    audit(r.acc?.username, 'revoke', String(body.userId))
     save()
     return json(res, 200, { ok: true })
   }
@@ -1089,6 +1301,66 @@ server.listen(PORT, () => console.log(`[tempo] billing server on :${PORT}`))
 // request must never take the whole billing/AI backend down with it.
 process.on('uncaughtException', (e) => console.warn('[tempo] uncaughtException (kept alive):', e?.message))
 process.on('unhandledRejection', (e) => console.warn('[tempo] unhandledRejection (kept alive):', e?.message || e))
+
+// ---------- reminder delivery scheduler ----------
+// Storing synced events is NOT delivery. This loop actually SENDS the
+// reminders as Telegram messages to the user's private chat (chatId is
+// captured on every webhook update). Runs every 30s; per-event deduplication
+// per calendar day so a reminder is never sent twice.
+function reminderLoop() {
+  const now = Date.now()
+  const todayISO = new Date().toISOString().slice(0, 10)
+  for (const u of Object.values(db.users)) {
+    if (!u.chatId || !Array.isArray(u.reminders) || u.reminders.length === 0) continue
+    u.reminderSent = u.reminderSent && u.reminderSent.date === todayISO ? u.reminderSent : { date: todayISO, ids: [] }
+    for (const ev of u.reminders) {
+      if (!ev.date || !ev.time || u.reminderSent.ids.includes(ev.id)) continue
+      const [h, m] = String(ev.time).split(':').map(Number)
+      if (![h, m].every(Number.isFinite)) continue
+      // the client syncs dates/times in the USER'S local zone; apply their
+      // tz offset to get the real UTC moment
+      const tzMin = typeof u.tzMinutes === 'number' && Math.abs(u.tzMinutes) <= 840 ? u.tzMinutes : 0
+      const eventTime = new Date(`${ev.date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`).getTime() - tzMin * 60000
+      if (!Number.isFinite(eventTime)) continue
+      const remindMin = typeof ev.remindMin === 'number' ? ev.remindMin : 60
+      const dueAt = eventTime - remindMin * 60000
+      // send when due, but skip stale reminders (more than 10 min late)
+      if (now >= dueAt && now - dueAt < 10 * 60000) {
+        u.reminderSent.ids.push(ev.id)
+        tgFetch('sendMessage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: u.chatId,
+            text: `⏰ ${ev.title} — ${ev.date} ${ev.time}`
+          })
+        }).catch(() => {
+          // delivery failed — drop the id so it is retried on the next tick
+          u.reminderSent.ids = u.reminderSent.ids.filter((x) => x !== ev.id)
+        })
+        save()
+      }
+    }
+  }
+}
+setInterval(reminderLoop, 30_000)
+setTimeout(reminderLoop, 5_000) // first run shortly after boot
+
+// ---------- graceful shutdown ----------
+function shutdown(signal) {
+  console.log(`[tempo] ${signal} — flushing data and closing`)
+  try {
+    clearTimeout(saveTimer)
+    persist(DATA_FILE, () => process.exit(0))
+    // hard exit if the final write hangs
+    setTimeout(() => process.exit(0), 3000).unref()
+  } catch (e) {
+    console.warn('[tempo] shutdown flush failed:', e?.message)
+    process.exit(0)
+  }
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
 
 setBotCommands()
 

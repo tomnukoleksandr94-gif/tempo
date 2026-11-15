@@ -15,7 +15,7 @@ export type { Plan }
 
 export const DATA_KEY = 'tempo-data-v1'
 
-export const DEFAULT_WIDGETS = ['overview', 'insight', 'upcoming', 'tasks', 'weekSpending', 'nutrition', 'history']
+export const DEFAULT_WIDGETS = ['overview', 'insight', 'upcoming', 'tasks', 'weekSpending', 'nutrition', 'weeklyReview', 'history']
 
 /** Detect the user's system/Telegram language and map it to a UI language. */
 export function detectLocale(): 'ru' | 'uk' | 'en' | 'de' | 'fr' {
@@ -43,7 +43,8 @@ const initialSettings: Settings = {
   autoConfirm: false,
   theme: 'dark',
   effects: true,
-  eventReminders: true
+  eventReminders: true,
+  onboarded: false
 }
 
 /** Free until a payment is verified server-side. Never set locally. */
@@ -203,6 +204,7 @@ interface Store extends AppData {
   applyActions(list: Validated[]): { applied: string[]; skipped: number }
   // data
   exportJson(): string
+  exportCsv(): string
   importJson(raw: string): boolean
   clearAll(): void
 }
@@ -428,13 +430,29 @@ export const useStore = create<Store>()(
         return { applied, skipped }
       },
 
+      /** Export WITHOUT the personal AI key (secrets never leave the device). */
       exportJson() {
         const { version, updatedAt, settings, transactions, tasks, events, meals, foods, budgets } = get()
+        const { apiKey: _secret, ...safeSettings } = settings
         return JSON.stringify(
-          { app: 'tempo', version, updatedAt, settings, transactions, tasks, events, meals, foods, budgets },
+          { app: 'tempo', version, updatedAt, settings: safeSettings, transactions, tasks, events, meals, foods, budgets },
           null,
           1
         )
+      },
+
+      /** CSV export of finance records (spreadsheet-friendly). */
+      exportCsv() {
+        const s = get()
+        const esc = (v: unknown) => {
+          const str = String(v ?? '')
+          return /[",\n;]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str
+        }
+        const head = 'date,type,amount,currency,category,note,source'
+        const rows = [...s.transactions]
+          .sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt))
+          .map((t) => [t.date, t.kind, t.amount, t.currency, t.category, t.note || '', t.source || 'manual'].map(esc).join(','))
+        return [head, ...rows].join('\n')
       },
 
       importJson(raw) {
@@ -536,9 +554,11 @@ export function initCloudSync() {
     if (cloudTimer) clearTimeout(cloudTimer)
     cloudTimer = setTimeout(() => {
       const { version, updatedAt, settings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } = useStore.getState() as any
+      // NEVER mirror the personal AI key to cloud storage (secret hygiene)
+      const { apiKey: _secret, ...safeSettings } = settings || {}
       cloudStore.set(
         DATA_KEY,
-        JSON.stringify({ state: { version, updatedAt, settings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } })
+        JSON.stringify({ state: { version, updatedAt, settings: safeSettings, subscription, referralCode, referral, planningTab, transactions, tasks, events, meals, foods, budgets, aiUsage, insight, chat, captures } })
       )
     }, 2000)
   })
@@ -596,6 +616,22 @@ export function expensesByCategory(
 
 export function mealsKcal(meals: Meal[]): number {
   return Math.round(meals.reduce((a, m) => a + m.items.reduce((x, i) => x + i.kcal, 0), 0))
+}
+
+/** Average kcal per tracked day over the last 7 days (0 days tracked → empty array). */
+export function mealsKcalPerDay(meals: Meal[], today: string): number[] {
+  const perDay = new Map<string, number>()
+  for (const m of meals) {
+    perDay.set(m.date, (perDay.get(m.date) || 0) + m.items.reduce((x, i) => x + i.kcal, 0))
+  }
+  const out: number[] = []
+  const d = new Date(today + 'T00:00:00Z')
+  for (let k = 6; k >= 0; k--) {
+    const iso = new Date(d.getTime() - k * 86400_000).toISOString().slice(0, 10)
+    const v = perDay.get(iso)
+    if (v) out.push(v)
+  }
+  return out
 }
 export function mealsMacros(meals: Meal[]) {
   return meals.reduce(

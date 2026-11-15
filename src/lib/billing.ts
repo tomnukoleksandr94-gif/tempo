@@ -240,9 +240,10 @@ export async function adminSupportReply(initData: string, userId: string, text: 
 /** Push upcoming events to the server so it can send Telegram reminders. */
 export async function remindersSync(
   initData: string,
-  events: { id: string; title: string; date: string; time?: string | null }[]
+  events: { id: string; title: string; date: string; time?: string | null; remindMin?: number | null }[],
+  tzMinutes?: number
 ): Promise<{ ok?: boolean; error?: string }> {
-  return api('/reminders/sync', { initData, events })
+  return api('/reminders/sync', { initData, events, tzMinutes })
 }
 
 /** Cancel auto-renewal (server-side). */

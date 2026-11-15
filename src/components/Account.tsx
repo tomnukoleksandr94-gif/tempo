@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   LogIn, UserPlus, LogOut, RefreshCw, CloudUpload, CloudDownload,
-  ShieldCheck, RefreshCcw, Ban, Crown, Users2, CreditCard
+  ShieldCheck, RefreshCcw, Ban, Crown, Users2, CreditCard, Trash2, Link2
 } from 'lucide-react'
-import { Btn, useToast } from './ui'
+import { Btn, Sheet, useToast } from './ui'
 import { useT } from '../lib/hooks'
 import { useStore } from '../lib/store'
 import {
   getAccount, login, register, logout, uploadData, downloadData,
-  adminOverview, adminGrant, adminRevoke,
+  adminOverview, adminGrant, adminRevoke, deleteAccount, linkTelegram,
   type AdminOverview, type AccountInfo
 } from '../lib/account'
 
@@ -240,6 +240,10 @@ export function AccountSection() {
   const [syncBusy, setSyncBusy] = useState(false)
   const exportJson = useStore((s) => s.exportJson)
   const importJson = useStore((s) => s.importJson)
+  const clearAll = useStore((s) => s.clearAll)
+  const [deleteSheet, setDeleteSheet] = useState(false)
+  const [confirmPass, setConfirmPass] = useState('')
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   if (!account) {
     return <AccountLogin onAccount={setAccount} />
@@ -292,11 +296,82 @@ export function AccountSection() {
           <Btn size="sm" variant="ghost" onClick={doDownload} disabled={syncBusy}>
             <CloudDownload size={14} /> {t2('acc.download')}
           </Btn>
+          {(() => {
+            // bind the verified Telegram identity to this account (by user ID)
+            const initData = (window as any)?.Telegram?.WebViewApp?.initData || ''
+            return initData ? (
+              <Btn
+                size="sm" variant="ghost"
+                onClick={async () => {
+                  const res = await linkTelegram(initData)
+                  toast(res.ok ? t2('acc.linkedTg') : t2('acc.linkTgFail'), res.ok ? 'ok' : 'err')
+                }}
+              >
+                <Link2 size={14} /> {t2('acc.linkTg')}
+              </Btn>
+            ) : null
+          })()}
           <Btn size="sm" variant="danger" onClick={() => { logout(); setAccount(null) }}>
             <LogOut size={14} /> {t2('acc.logout')}
           </Btn>
         </div>
       </div>
+
+      {/* self-service account deletion (GDPR) */}
+      <div className="glass flex items-center gap-3 p-4">
+        <Trash2 size={16} className="shrink-0 text-[#FF453A]" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold">{t2('acc.deleteTitle')}</div>
+          <p className="mt-0.5 text-[11px] leading-snug text-t3">{t2('acc.deleteHint')}</p>
+        </div>
+        <Btn size="sm" variant="danger" onClick={() => setDeleteSheet(true)}>
+          {t2('c.delete')}
+        </Btn>
+      </div>
+
+      <Sheet
+        open={deleteSheet}
+        onClose={() => { setDeleteSheet(false); setConfirmPass('') }}
+        title={t2('acc.deleteTitle')}
+        footer={
+          <div className="flex gap-2.5">
+            <Btn variant="ghost" className="flex-1" onClick={() => { setDeleteSheet(false); setConfirmPass('') }}>
+              {t2('c.cancel')}
+            </Btn>
+            <Btn
+              variant="danger"
+              className="flex-1"
+              disabled={deleteBusy || confirmPass.length < 6}
+              onClick={async () => {
+                setDeleteBusy(true)
+                const res = await deleteAccount(confirmPass)
+                setDeleteBusy(false)
+                setDeleteSheet(false)
+                setConfirmPass('')
+                if (res.ok) {
+                  clearAll() // wipe local data as well
+                  setAccount(null)
+                  toast(t2('acc.deleted'), 'ok')
+                } else {
+                  toast(res.error === 'wrong password' ? t2('acc.wrongPass') : t2('acc.serverOff'), 'err')
+                }
+              }}
+            >
+              {t2('acc.deleteConfirm')}
+            </Btn>
+          </div>
+        }
+      >
+        <p className="py-2 text-[13px] leading-relaxed text-t2">{t2('acc.deleteWarn')}</p>
+        <input
+          className="inp h-10 w-full"
+          type="password"
+          placeholder={t2('acc.deletePassPlaceholder')}
+          value={confirmPass}
+          onChange={(e) => setConfirmPass(e.target.value)}
+          autoComplete="current-password"
+        />
+      </Sheet>
 
       {account.role === 'admin' && <AdminPanel onExpired={handleExpired} />}
     </div>

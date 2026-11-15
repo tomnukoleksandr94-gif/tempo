@@ -27,7 +27,9 @@ const ru: Dict = {
   'pay.thanks': 'Спасибо за поддержку!',
   'pay.activated': 'Подписка активирована. Приятного использования Tempo ⚡',
   'pr.support': 'Поддержка',
-  'pr.effects': 'Анимации\', \'pr.on\': \'Вкл\', \'pr.off\': \'Выкл',
+  'pr.effects': 'Анимации',
+  'pr.on': 'Вкл',
+  'pr.off': 'Выкл',
   'g.night': 'Доброй ночи',
   'g.morning': 'Доброе утро',
   'g.day': 'Добрый день',
@@ -386,7 +388,55 @@ const ru: Dict = {
   'err.network': 'Ошибка сети',
   'err.invalidAmount': 'Некорректная сумма',
   'err.storage': 'Хранилище недоступно — данные не сохранятся',
-  'err.parse': 'Не удалось разобрать ответ AI'
+  'err.parse': 'Не удалось разобрать ответ AI',
+
+  // onboarding
+  'on.title': 'Добро пожаловать в Tempo',
+  'on.next': 'Далее',
+  'on.finish': 'Начать',
+  'on.welcomeText': 'Tempo — AI Life OS: финансы, задачи, календарь и питание в одном приложении. Настройте его под себя — это займёт полмининуты.',
+  'on.nameLabel': 'Как вас зовут?',
+  'on.langLabel': 'Язык интерфейса',
+  'on.currencyLabel': 'Основная валюта',
+  'on.currencyHint': 'Можно изменить в любой момент в Профиле.',
+  'on.kcalLabel': 'Дневная цель по калориям (необязательно)',
+  'on.kcalHint': 'Нужно только для отслеживания питания — пропустите, если не нужно.',
+  'on.skip': 'Пропустить всё и начать',
+
+  // global search
+  'search.placeholder': 'Поиск: расходы, задачи, события, еда…',
+  'search.typeMore': 'Введите минимум 2 символа',
+  'search.empty': 'Ничего не найдено',
+  'search.f_all': 'Всё',
+  'search.f_tx': 'Финансы',
+  'search.f_task': 'Задачи',
+  'search.f_event': 'События',
+  'search.f_meal': 'Еда',
+
+  // weekly review
+  'home.weeklyReview': 'Итоги недели',
+  'weekly.tasksDone': 'задач выполнено',
+  'weekly.tasksOpen': 'осталось задач',
+  'weekly.spend': 'расходы за неделю',
+  'weekly.kcal': 'калорий в среднем в день',
+  'weekly.noData': 'Данных за неделю пока нет',
+
+  // account deletion (GDPR)
+  'acc.deleteTitle': 'Удалить аккаунт',
+  'acc.deleteHint': 'Полное удаление аккаунта и облачных данных',
+  'acc.deleteWarn': 'Аккаунт и все облачные данные будут удалены безвозвратно. Финансовые записи сохраняются анонимно для отчётности. Для подтверждения введите пароль.',
+  'acc.deleteConfirm': 'Удалить навсегда',
+  'acc.deletePassPlaceholder': 'Пароль для подтверждения',
+  'acc.deleted': 'Аккаунт удалён',
+  'acc.wrongPass': 'Неверный пароль',
+
+  // telegram linking
+  'acc.linkTg': 'Связать Telegram',
+  'acc.linkedTg': 'Telegram связан с аккаунтом',
+  'acc.linkTgFail': 'Не удалось связать Telegram',
+
+  // data
+  'pr.exportCsv': 'Экспорт CSV (финансы)'
 }
 
 const en: Dict = {
@@ -407,7 +457,9 @@ const en: Dict = {
   'pay.thanks': 'Thank you for your support!',
   'pay.activated': 'Your subscription is active. Enjoy Tempo ⚡',
   'pr.support': 'Support',
-  'pr.effects': 'Animations\', \'pr.on\': \'On\', \'pr.off\': \'Off',
+  'pr.effects': 'Animations',
+  'pr.on': 'On',
+  'pr.off': 'Off',
   'g.night': 'Good night',
   'g.morning': 'Good morning',
   'g.day': 'Good afternoon',
@@ -766,7 +818,55 @@ const en: Dict = {
   'err.network': 'Network error',
   'err.invalidAmount': 'Invalid amount',
   'err.storage': 'Storage unavailable — data will not persist',
-  'err.parse': 'Could not parse the AI response'
+  'err.parse': 'Could not parse the AI response',
+
+  // onboarding
+  'on.title': 'Welcome to Tempo',
+  'on.next': 'Next',
+  'on.finish': 'Start',
+  'on.welcomeText': 'Tempo is an AI Life OS: finance, tasks, calendar and nutrition in one app. Set it up — it takes half a minute.',
+  'on.nameLabel': 'What should we call you?',
+  'on.langLabel': 'Interface language',
+  'on.currencyLabel': 'Main currency',
+  'on.currencyHint': 'You can change it any time in Profile.',
+  'on.kcalLabel': 'Daily calorie goal (optional)',
+  'on.kcalHint': 'Only needed for nutrition tracking — skip if you don\'t need it.',
+  'on.skip': 'Skip everything and start',
+
+  // global search
+  'search.placeholder': 'Search: expenses, tasks, events, meals…',
+  'search.typeMore': 'Type at least 2 characters',
+  'search.empty': 'Nothing found',
+  'search.f_all': 'All',
+  'search.f_tx': 'Finance',
+  'search.f_task': 'Tasks',
+  'search.f_event': 'Events',
+  'search.f_meal': 'Meals',
+
+  // weekly review
+  'home.weeklyReview': 'This week',
+  'weekly.tasksDone': 'tasks completed',
+  'weekly.tasksOpen': 'tasks remaining',
+  'weekly.spend': 'spent this week',
+  'weekly.kcal': 'kcal daily average',
+  'weekly.noData': 'No data for this week yet',
+
+  // account deletion (GDPR)
+  'acc.deleteTitle': 'Delete account',
+  'acc.deleteHint': 'Permanently delete the account and cloud data',
+  'acc.deleteWarn': 'The account and all cloud data will be deleted permanently. Financial records are kept anonymously for accounting. Enter your password to confirm.',
+  'acc.deleteConfirm': 'Delete forever',
+  'acc.deletePassPlaceholder': 'Password to confirm',
+  'acc.deleted': 'Account deleted',
+  'acc.wrongPass': 'Wrong password',
+
+  // telegram linking
+  'acc.linkTg': 'Link Telegram',
+  'acc.linkedTg': 'Telegram linked to your account',
+  'acc.linkTgFail': 'Could not link Telegram',
+
+  // data
+  'pr.exportCsv': 'CSV export (finance)'
 }
 
 const uk: Dict = {
@@ -787,7 +887,9 @@ const uk: Dict = {
   'pay.thanks': 'Дякуємо за підтримку!',
   'pay.activated': 'Підписку активовано. Приємного користування Tempo ⚡',
   'pr.support': 'Підтримка',
-  'pr.effects': 'Анімації\', \'pr.on\': \'Увімк\', \'pr.off\': \'Вимк',
+  'pr.effects': 'Анімації',
+  'pr.on': 'Увімк',
+  'pr.off': 'Вимк',
   'g.night': 'Доброї ночі',
   'g.morning': 'Доброго ранку',
   'g.day': 'Добрий день',
@@ -1127,6 +1229,54 @@ const uk: Dict = {
   'err.network': 'Помилка мережі',
   'err.invalidAmount': 'Некоректна сума',
   'err.storage': 'Сховище недоступне — дані не збережуться',
+
+  // onboarding
+  'on.title': 'Ласкаво просимо до Tempo',
+  'on.next': 'Далі',
+  'on.finish': 'Почати',
+  'on.welcomeText': 'Tempo — AI Life OS: фінанси, завдання, календар і харчування в одному застосунку. Налаштуйте під себе — це займе півхвилини.',
+  'on.nameLabel': 'Як вас звати?',
+  'on.langLabel': 'Мова інтерфейсу',
+  'on.currencyLabel': 'Основна валюта',
+  'on.currencyHint': 'Можна змінити будь-коли у Профілі.',
+  'on.kcalLabel': 'Денна ціль за калоріями (необов\'язково)',
+  'on.kcalHint': 'Потрібно лише для відстеження харчування — пропустіть, якщо не потрібно.',
+  'on.skip': 'Пропустити все і почати',
+
+  // global search
+  'search.placeholder': 'Пошук: витрати, завдання, події, їжа…',
+  'search.typeMore': 'Введіть щонайменше 2 символи',
+  'search.empty': 'Нічого не знайдено',
+  'search.f_all': 'Все',
+  'search.f_tx': 'Фінанси',
+  'search.f_task': 'Завдання',
+  'search.f_event': 'Події',
+  'search.f_meal': 'Їжа',
+
+  // weekly review
+  'home.weeklyReview': 'Підсумки тижня',
+  'weekly.tasksDone': 'завдань виконано',
+  'weekly.tasksOpen': 'завдань залишилось',
+  'weekly.spend': 'витрати за тиждень',
+  'weekly.kcal': 'калорій у середньому за день',
+  'weekly.noData': 'Даних за тиждень поки немає',
+
+  // account deletion (GDPR)
+  'acc.deleteTitle': 'Видалити акаунт',
+  'acc.deleteHint': 'Повне видалення акаунта та хмарних даних',
+  'acc.deleteWarn': 'Акаунт і всі хмарні дані буде видалено безповоротно. Фінансові записи зберігаються анонімно для звітності. Для підтвердження введіть пароль.',
+  'acc.deleteConfirm': 'Видалити назавжди',
+  'acc.deletePassPlaceholder': 'Пароль для підтвердження',
+  'acc.deleted': 'Акаунт видалено',
+  'acc.wrongPass': 'Неправильний пароль',
+
+  // telegram linking
+  'acc.linkTg': 'Прив\'язати Telegram',
+  'acc.linkedTg': 'Telegram прив\'язано до акаунта',
+  'acc.linkTgFail': 'Не вдалося прив\'язати Telegram',
+
+  // data
+  'pr.exportCsv': 'Експорт CSV (фінанси)'
 }
 
 const de: Dict = {
@@ -1147,7 +1297,9 @@ const de: Dict = {
   'pay.thanks': 'Danke für deine Unterstützung!',
   'pay.activated': 'Dein Abo ist aktiv. Viel Spaß mit Tempo ⚡',
   'pr.support': 'Support',
-  'pr.effects': 'Animationen\', \'pr.on\': \'Ein\', \'pr.off\': \'Aus',
+  'pr.effects': 'Animationen',
+  'pr.on': 'Ein',
+  'pr.off': 'Aus',
   'g.night': 'Gute Nacht',
   'g.morning': 'Guten Morgen',
   'g.day': 'Guten Tag',
@@ -1487,6 +1639,54 @@ const de: Dict = {
   'err.network': 'Netzwerkfehler',
   'err.invalidAmount': 'Ungültiger Betrag',
   'err.storage': 'Speicher nicht verfügbar – Daten werden nicht gespeichert',
+
+  // onboarding
+  'on.title': 'Willkommen bei Tempo',
+  'on.next': 'Weiter',
+  'on.finish': 'Los geht\'s',
+  'on.welcomeText': 'Tempo ist eine AI Life OS: Finanzen, Aufgaben, Kalender und Ernährung in einer App. Richte sie ein – das dauert eine halbe Minute.',
+  'on.nameLabel': 'Wie sollen wir dich nennen?',
+  'on.langLabel': 'Sprache der Oberfläche',
+  'on.currencyLabel': 'Hauptwährung',
+  'on.currencyHint': 'Jederzeit im Profil änderbar.',
+  'on.kcalLabel': 'Tägliches Kalorienziel (optional)',
+  'on.kcalHint': 'Nur für die Ernährungsverfolgung nötig – sonst überspringen.',
+  'on.skip': 'Alles überspringen und starten',
+
+  // global search
+  'search.placeholder': 'Suche: Ausgaben, Aufgaben, Termine, Mahlzeiten…',
+  'search.typeMore': 'Mindestens 2 Zeichen eingeben',
+  'search.empty': 'Nichts gefunden',
+  'search.f_all': 'Alles',
+  'search.f_tx': 'Finanzen',
+  'search.f_task': 'Aufgaben',
+  'search.f_event': 'Termine',
+  'search.f_meal': 'Essen',
+
+  // weekly review
+  'home.weeklyReview': 'Diese Woche',
+  'weekly.tasksDone': 'Aufgaben erledigt',
+  'weekly.tasksOpen': 'Aufgaben offen',
+  'weekly.spend': 'Ausgaben diese Woche',
+  'weekly.kcal': 'kcal im Tagesdurchschnitt',
+  'weekly.noData': 'Noch keine Daten für diese Woche',
+
+  // account deletion (GDPR)
+  'acc.deleteTitle': 'Konto löschen',
+  'acc.deleteHint': 'Konto und Cloud-Daten endgültig löschen',
+  'acc.deleteWarn': 'Das Konto und alle Cloud-Daten werden endgültig gelöscht. Finanzdatensätze bleiben anonymisiert für die Buchhaltung erhalten. Zur Bestätigung dein Passwort eingeben.',
+  'acc.deleteConfirm': 'Endgültig löschen',
+  'acc.deletePassPlaceholder': 'Passwort zur Bestätigung',
+  'acc.deleted': 'Konto gelöscht',
+  'acc.wrongPass': 'Falsches Passwort',
+
+  // telegram linking
+  'acc.linkTg': 'Telegram verknüpfen',
+  'acc.linkedTg': 'Telegram mit deinem Konto verknüpft',
+  'acc.linkTgFail': 'Telegram konnte nicht verknüpft werden',
+
+  // data
+  'pr.exportCsv': 'CSV-Export (Finanzen)'
 }
 
 const fr: Dict = {
@@ -1507,7 +1707,9 @@ const fr: Dict = {
   'pay.thanks': 'Merci pour votre soutien !',
   'pay.activated': 'Votre abonnement est actif. Profitez de Tempo ⚡',
   'pr.support': 'Assistance',
-  'pr.effects': 'Animations\', \'pr.on\': \'Actif\', \'pr.off\': \'Inactif',
+  'pr.effects': 'Animations',
+  'pr.on': 'Actif',
+  'pr.off': 'Inactif',
   'g.night': 'Bonne nuit',
   'g.morning': 'Bonjour',
   'g.day': 'Bonjour',
@@ -1847,6 +2049,54 @@ const fr: Dict = {
   'err.network': 'Erreur réseau',
   'err.invalidAmount': 'Montant invalide',
   'err.storage': 'Stockage indisponible — les données ne seront pas sauvegardées',
+
+  // onboarding
+  'on.title': 'Bienvenue sur Tempo',
+  'on.next': 'Suivant',
+  'on.finish': 'Commencer',
+  'on.welcomeText': 'Tempo est une AI Life OS : finances, tâches, calendrier et nutrition dans une seule app. Configure-la — une demi-minute suffit.',
+  'on.nameLabel': 'Comment vous appeler ?',
+  'on.langLabel': 'Langue de l\'interface',
+  'on.currencyLabel': 'Devise principale',
+  'on.currencyHint': 'Modifiable à tout moment dans le Profil.',
+  'on.kcalLabel': 'Objectif calorique quotidien (facultatif)',
+  'on.kcalHint': 'Uniquement pour le suivi nutritionnel — sinon, passez.',
+  'on.skip': 'Tout ignorer et commencer',
+
+  // global search
+  'search.placeholder': 'Recherche : dépenses, tâches, événements, repas…',
+  'search.typeMore': 'Saisissez au moins 2 caractères',
+  'search.empty': 'Aucun résultat',
+  'search.f_all': 'Tout',
+  'search.f_tx': 'Finances',
+  'search.f_task': 'Tâches',
+  'search.f_event': 'Événements',
+  'search.f_meal': 'Repas',
+
+  // weekly review
+  'home.weeklyReview': 'Cette semaine',
+  'weekly.tasksDone': 'tâches terminées',
+  'weekly.tasksOpen': 'tâches restantes',
+  'weekly.spend': 'dépensé cette semaine',
+  'weekly.kcal': 'kcal en moyenne par jour',
+  'weekly.noData': 'Pas encore de données cette semaine',
+
+  // account deletion (GDPR)
+  'acc.deleteTitle': 'Supprimer le compte',
+  'acc.deleteHint': 'Suppression définitive du compte et des données cloud',
+  'acc.deleteWarn': 'Le compte et toutes les données cloud seront supprimés définitivement. Les écritures financières sont conservées anonymement pour la comptabilité. Saisissez votre mot de passe pour confirmer.',
+  'acc.deleteConfirm': 'Supprimer définitivement',
+  'acc.deletePassPlaceholder': 'Mot de passe de confirmation',
+  'acc.deleted': 'Compte supprimé',
+  'acc.wrongPass': 'Mot de passe incorrect',
+
+  // telegram linking
+  'acc.linkTg': 'Lier Telegram',
+  'acc.linkedTg': 'Telegram lié à votre compte',
+  'acc.linkTgFail': 'Impossible de lier Telegram',
+
+  // data
+  'pr.exportCsv': 'Export CSV (finances)'
 }
 
 const dicts: Record<Locale, Dict> = { ru, uk, en, de, fr }

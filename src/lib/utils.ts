@@ -89,8 +89,8 @@ export function greeting(hour: number, locale: string): string {
   return t('g.evening', locale)
 }
 
-export function download(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'application/json' })
+export function download(filename: string, text: string, mime = 'application/json') {
+  const blob = new Blob([text], { type: mime })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

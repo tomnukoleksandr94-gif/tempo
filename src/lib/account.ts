@@ -112,6 +112,24 @@ export async function downloadData(): Promise<{ data: string | null; error?: str
   return res.error ? { data: null, error: res.error } : { data: res.data ?? null }
 }
 
+/** Delete the account server-side (requires the password as confirmation). */
+export async function deleteAccount(password: string): Promise<{ ok: boolean; error?: string }> {
+  const token = getToken()
+  if (!token) return { ok: false, error: 'no account' }
+  const res = await api('/account/delete', { token, password })
+  if (res.error) return { ok: false, error: res.error === 'HTTP 403' ? 'wrong password' : String(res.error) }
+  clear()
+  return { ok: true }
+}
+
+/** Bind the verified Telegram identity (initData) to the logged-in account. */
+export async function linkTelegram(initData: string): Promise<{ ok: boolean; error?: string }> {
+  const token = getToken()
+  if (!token) return { ok: false, error: 'no account' }
+  const res = await api('/account/link-telegram', { token, initData })
+  return res.error ? { ok: false, error: String(res.error) } : { ok: true }
+}
+
 // ---------- admin API (owner only, verified server-side) ----------
 
 export interface AdminUser {

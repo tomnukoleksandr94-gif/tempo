@@ -15,6 +15,8 @@ import Profile from './pages/Profile'
 import BillingPage from './pages/Billing'
 import SupportPage from './pages/Support'
 import { SuccessOverlay } from './components/SuccessOverlay'
+import { Onboarding } from './components/Onboarding'
+import { GlobalSearch } from './components/GlobalSearch'
 
 export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'billing' | 'support' | 'profile'
 
@@ -221,9 +223,14 @@ export default function App() {
       const soon = events
         .filter((e: any) => e.date >= today)
         .slice(0, 30)
-        .map((e: any) => ({ id: e.id, title: e.title, date: e.date, time: e.time || null }))
+        .map((e: any) => ({
+          id: e.id, title: e.title, date: e.date, time: e.time || null,
+          remindMin: e.remindMin ?? null
+        }))
+      // user timezone offset in minutes from UTC (matches server reminder scheduler)
+      const tzMinutes = -new Date().getTimezoneOffset()
       import('./lib/billing').then(({ remindersSync }) => {
-        remindersSync(initData, eventReminders ? soon : []).catch(() => {})
+        remindersSync(initData, eventReminders ? soon : [], tzMinutes).catch(() => {})
       })
     }, 3000)
     return () => clearTimeout(id)
@@ -262,8 +269,29 @@ export default function App() {
     setTab(t)
     window.scrollTo({ top: 0 })
   }
+
+  // global search: Ctrl/Cmd+K or Home header button
+  const [searchOpen, setSearchOpen] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    const onOpen = () => setSearchOpen(true)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('tempo-open-search', onOpen)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('tempo-open-search', onOpen)
+    }
+  }, [])
+
   return (
     <ToastProvider>
+      <Onboarding />
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <div aria-hidden className={`glass-orbs${effects ? '' : ' no-effects'}`} />
       <div className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-[1080px] md:flex-row${effects ? '' : ' no-effects'}`}>
         <Sidebar tab={tab} go={go} />

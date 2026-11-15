@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import {
   Sparkles, ChevronRight, Flame, ListChecks, CalendarClock, Wallet,
-  RefreshCw, UtensilsCrossed, Clock, History, Check
+  RefreshCw, UtensilsCrossed, Clock, History, Check, Search
 } from 'lucide-react'
 import type { TabId } from '../App'
 import { CaptureInput } from '../components/CaptureInput'
 import { CaptureFlow, type CaptureRequest } from '../components/CaptureFlow'
 import { SectionHeader, StatTile, EmptyState, useToast } from '../components/ui'
 import { Ring, Sparkline, MacroBar } from '../components/charts'
-import { useStore, useDayExpense, weekDailyTotals, mealsKcal, mealsMacros, nextEventDate, DEFAULT_WIDGETS } from '../lib/store'
+import { useStore, useDayExpense, weekDailyTotals, mealsKcal, mealsKcalPerDay, mealsMacros, nextEventDate, DEFAULT_WIDGETS } from '../lib/store'
 import { useT } from '../lib/hooks'
 import { generateInsight } from '../lib/ai'
 import { t } from '../lib/i18n'
@@ -94,6 +94,16 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
   }, [events, today])
   const weekData = useMemo(() => weekDailyTotals(transactions, today), [transactions, today])
   const weekTotal = weekData.reduce((a, d) => a + d.value, 0)
+
+  // ----- weekly review (real data only) -----
+  const weeklyDone = useMemo(() => tasks.filter((tk) => tk.done && tk.doneAt && tk.doneAt > Date.now() - 7 * 86400_000).length, [tasks])
+  const weeklyOpen = useMemo(() => tasks.filter((tk) => !tk.done).length, [tasks])
+  const weeklyKcal = useMemo(() => {
+    const days = mealsKcalPerDay(meals, today)
+    const vals = days.filter((v) => v > 0)
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
+  }, [meals, today])
+  const weeklyHasData = weeklyDone > 0 || weeklyOpen > 0 || weekTotal > 0 || weeklyKcal > 0
 
   const WIDGETS: Record<string, ReactElement | null> = {
     overview: (
@@ -255,19 +265,53 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
             </div>
           ))}
         </div>
-      ) : null
+      ) : null,
+    weeklyReview: weeklyHasData ? (
+      <div className="glass p-4">
+        <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2">
+          <div className="flex items-center gap-2">
+            <Check size={14} className="text-[#30D158]" />
+            <span className="text-[13px] text-t2"><b className="tabular text-t1">{weeklyDone}</b> {t2('weekly.tasksDone')}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <ListChecks size={14} className="text-acc" />
+            <span className="text-[13px] text-t2"><b className="tabular text-t1">{weeklyOpen}</b> {t2('weekly.tasksOpen')}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Wallet size={14} className="text-t3" />
+            <span className="text-[13px] text-t2"><b className="tabular text-t1">{money(weekTotal, settings.currency, locale)}</b> {t2('weekly.spend')}</span>
+          </div>
+          {weeklyKcal > 0 && (
+            <div className="flex items-center gap-2">
+              <Flame size={14} className="text-[#FF9F0A]" />
+              <span className="text-[13px] text-t2"><b className="tabular text-t1">{Math.round(weeklyKcal)}</b> {t2('weekly.kcal')}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null
   }
 
   const hour = new Date().getHours()
   return (
     <div className="mx-auto max-w-[640px] md:max-w-none">
       {/* greeting */}
-      <div className="mb-4">
-        <h1 className="text-lg font-bold tracking-tight">
-          {greeting(hour, locale)}
-          {settings.name ? `, ${settings.name}` : ''}
-        </h1>
-        <p className="mt-0.5 text-[13px] text-t2 capitalize">{fmtDate(today, locale, 'day')}</p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight">
+            {greeting(hour, locale)}
+            {settings.name ? `, ${settings.name}` : ''}
+          </h1>
+          <p className="mt-0.5 text-[13px] text-t2 capitalize">{fmtDate(today, locale, 'day')}</p>
+        </div>
+        <button
+          aria-label={t2('search.placeholder')}
+          title="Ctrl+K"
+          onClick={() => window.dispatchEvent(new CustomEvent('tempo-open-search'))}
+          className="press mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-soft text-t2 active:scale-95"
+        >
+          <Search size={16} />
+        </button>
       </div>
 
       {/* quick capture */}
@@ -285,6 +329,7 @@ export default function HomePage({ go }: { go: (t: TabId) => void }) {
                   w === 'tasks' ? t2('home.pendingTasks') :
                   w === 'weekSpending' ? t2('home.weekSpending') :
                   w === 'nutrition' ? t2('home.todayNutrition') :
+                  w === 'weeklyReview' ? t2('home.weeklyReview') :
                   t2('home.history')
                 }
                 action={
