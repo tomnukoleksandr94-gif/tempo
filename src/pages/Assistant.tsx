@@ -421,7 +421,12 @@ export default function Assistant() {
               applied: r.applied
             })
           } else {
-            pushChat({ id: uid(), role: 'ai', text: t('err.ai', locale), ts: Date.now(), error: true })
+            const msg =
+              r.error === 'config' ? t('ai.serverConfig', locale) :
+              r.error === 'auth' ? t('pr.apiKeyHint', locale) :
+              r.error === 'limit' ? t('ai.limitReached', locale) :
+              t('err.ai', locale)
+            pushChat({ id: uid(), role: 'ai', text: msg, ts: Date.now(), error: true })
           }
         }}
       />

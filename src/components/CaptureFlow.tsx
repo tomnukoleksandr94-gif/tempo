@@ -81,6 +81,7 @@ export function CaptureFlow({
           e?.code === 'limit' ? t('ai.limitReached', settings.locale) :
           e?.code === 'plan' ? t('ai.planRequired', settings.locale) :
           e?.code === 'auth' ? t('pr.apiKeyHint', settings.locale) :
+          e?.code === 'config' ? t('ai.serverConfig', settings.locale) :
           e?.code === 'quota' ? t('ai.quota', settings.locale) :
           e?.code === 'timeout' ? t('ai.timeout', settings.locale) :
           t('err.ai', settings.locale)
