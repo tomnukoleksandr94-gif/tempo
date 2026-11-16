@@ -37,7 +37,9 @@ let TG_TOKEN_AVAIL = !!(BOT_TOKEN || TG_CRED)
 const PORT = Number(process.env.PORT || 3000)
 // Shared secret for the Telegram webhook (set via setWebhook secret_token).
 // When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || ''
+// If not provided via env, a random one is generated per process and registered
+// with setWebhook on startup — they can never mismatch.
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || crypto.randomBytes(24).toString('hex')
 // Public URL of the Mini App (used in the bot's /start welcome button)
 async function setBotCommands() {
   if (!TG_TOKEN_AVAIL) return
@@ -1374,6 +1376,7 @@ setBotCommands()
     const j = await r?.json().catch(() => null)
     if (j?.ok) {
       console.log('[tempo] Telegram API OK — bot @' + (j.result?.username || '?'))
+      await syncBotTargeting()
     } else {
       TG_TOKEN_AVAIL = false
       console.warn('[tempo] Telegram API probe failed (' + (j?.description || r?.status || 'no response') + ') — Stars billing and initData login disabled. Set BOT_TOKEN env with the raw token to enable Telegram features.')
@@ -1383,3 +1386,43 @@ setBotCommands()
     console.warn('[tempo] Telegram API probe error:', e?.message, '— Telegram features disabled')
   }
 })()
+
+/**
+ * Keep the bot pointing at THIS deployment. The /start «Открыть Tempo»
+ * buttons are generated per-message by whichever server the webhook hits, so
+ * the webhook URL decides which version users get. If the webhook (or the
+ * menu button) still targets an older deployment, re-point it here on every
+ * startup. Idempotent and safe to run repeatedly.
+ */
+async function syncBotTargeting() {
+  const hookUrl = APP_URL + '/port/3000/api/telegram-webhook'
+  try {
+    await tgFetch('setChatMenuButton', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: { type: 'web_app', text: 'Открыть Tempo ⚡', web_app: { url: APP_URL } }
+      })
+    })
+  } catch (e) { console.warn('[tempo] setChatMenuButton failed:', e?.message) }
+  try {
+    const r = await tgFetch('getWebhookInfo', { method: 'POST' })
+    const j = await r?.json().catch(() => null)
+    if (!j?.ok) return
+    if (j.result?.url === hookUrl) {
+      console.log('[tempo] webhook already at', hookUrl)
+      return
+    }
+    const sw = await tgFetch('setWebhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: hookUrl,
+        allowed_updates: ['message', 'pre_checkout_query'],
+        secret_token: WEBHOOK_SECRET
+      })
+    })
+    const sj = await sw?.json().catch(() => null)
+    console.log('[tempo] webhook re-pointed to', hookUrl, sj?.ok ? '(ok)' : '(FAILED: ' + (sj?.description || 'no response') + ')')
+  } catch (e) { console.warn('[tempo] webhook sync failed:', e?.message) }
+}
