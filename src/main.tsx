@@ -4,6 +4,7 @@ import App from './App'
 import './styles.css'
 import { initCloudSync, useStore } from './lib/store'
 import { tgReady, tgUser } from './lib/telegram'
+import { ensureLocale } from './lib/i18n'
 
 tgReady()
 initCloudSync()
@@ -15,8 +16,14 @@ if (!st.settings.name) {
   if (u?.first_name) st.setSettings({ name: u.first_name })
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-)
+// Mount only when the user's language dictionary is ready (instant for ru,
+// one small chunk otherwise) — no flash of the wrong language on startup.
+ensureLocale(st.settings.locale || 'ru')
+  .catch(() => {})
+  .finally(() => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    )
+  })

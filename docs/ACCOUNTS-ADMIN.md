@@ -36,7 +36,7 @@ BOT_TOKEN=<токен бота> ADMIN_PASS=<пароль админа> WEBHOOK_S
 # https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=<адрес>/api/telegram-webhook&secret_token=<WEBHOOK_SECRET>
 ```
 
-Текущий продакшн: **https://tempo-lifeos.pplx.app** (сервер проксируется по пути `/port/3000/`).
+Текущий продакшн: **https://tempo-lifeos-app.pplx.app** (сервер проксируется по пути `/port/3000/`).
 
 Безопасность сервера: webhook принимает только запросы с заголовком `X-Telegram-Bot-Api-Secret-Token` = `WEBHOOK_SECRET`; без `ADMIN_PASS` админ-аккаунт не создаётся; вход/регистрация ограничены 5 попытками в минуту с IP; токен сессии передаётся в заголовке `Authorization: Bearer`.
 

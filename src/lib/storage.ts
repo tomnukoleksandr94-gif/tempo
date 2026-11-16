@@ -64,7 +64,12 @@ const CHUNK = 3500 // chars per chunk (Telegram CloudStorage value limit is 4096
 
 function cs(): any {
   try {
-    return (window as any)?.Telegram?.WebApp?.CloudStorage
+    const webapp = (window as any)?.Telegram?.WebApp
+    // Only use CloudStorage inside a real Telegram client: outside Telegram
+    // the SDK still defines the methods but every call logs an error to the
+    // console ("CloudStorage is not supported") and does nothing useful.
+    if (!webapp?.initData) return null
+    return webapp.CloudStorage
   } catch {
     return null
   }

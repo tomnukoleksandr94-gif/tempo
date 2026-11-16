@@ -1,12 +1,21 @@
 import { LOCALE_TAGS } from './utils'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useStore } from './store'
-import { t as translate } from './i18n'
+import { t as translate, subscribeDicts, getDictVersion } from './i18n'
 
-/** locale-aware translation hook */
+/** re-renders the component when a lazily loaded locale dictionary arrives */
+export function useDictVersion(): number {
+  return useSyncExternalStore(subscribeDicts, getDictVersion)
+}
+
+/** locale-aware translation hook (re-renders when the locale dictionary arrives) */
 export function useT() {
   const locale = useStore((s) => s.settings.locale)
-  return useCallback((key: string, vars?: Record<string, string | number>) => translate(key, locale, vars), [locale])
+  const dictVersion = useSyncExternalStore(subscribeDicts, getDictVersion)
+  return useCallback(
+    (key: string, vars?: Record<string, string | number>) => translate(key, locale, vars),
+    [locale, dictVersion]
+  )
 }
 
 /** Web Speech API input (Chrome/Android/TDesktop; iOS webview may not support) */

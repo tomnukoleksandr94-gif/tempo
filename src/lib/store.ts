@@ -6,7 +6,7 @@ import type {
 } from './types'
 import { uid, todayISO, addDays, parseISODate, monthKey, startOfWeekISO } from './utils'
 import { localStore, cloudStore, storageAvailable } from './storage'
-import { setDefaultLocale } from './i18n'
+import { setDefaultLocale, onLocaleDictLoaded } from './i18n'
 import type { Validated } from './validate'
 import { aiLimitFor } from './billing'
 import type { PlanningTab } from '../pages/Planning'
@@ -650,3 +650,6 @@ export function mealsMacros(meals: Meal[]) {
 // keep the i18n default language in sync with the user's setting
 useStore.subscribe((s) => { if (s?.settings?.locale) setDefaultLocale(s.settings.locale) })
 setDefaultLocale(useStore.getState().settings.locale)
+// when a lazily loaded locale dictionary arrives (see lib/i18n.ts), nudge the
+// store so mounted components re-render in the newly available language
+onLocaleDictLoaded(() => useStore.setState((s) => ({ settings: { ...s.settings } })))

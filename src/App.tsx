@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { ToastProvider, useToast } from './components/ui'
 import { useStore, eventOccursOn } from './lib/store'
+import { useDictVersion } from './lib/hooks'
 import { t } from './lib/i18n'
 import { haptic, tg, isTelegram } from './lib/telegram'
 import HomePage from './pages/Home'
@@ -86,6 +87,7 @@ function IslandBar() {
 // ---------- tab bar (mobile) ----------
 function TabBar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
   const locale = useStore((s) => s.settings.locale)
+  useDictVersion() // re-render when the locale dictionary arrives
   return (
     <nav className="glass-nav fixed inset-x-0 bottom-0 z-40 md:hidden" aria-label="main">
       <div className="mx-auto flex max-w-[520px] items-stretch justify-between px-1 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5">
@@ -111,6 +113,7 @@ function TabBar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
 // ---------- sidebar (desktop) ----------
 function Sidebar({ tab, go }: { tab: TabId; go: (t: TabId) => void }) {
   const locale = useStore((s) => s.settings.locale)
+  useDictVersion() // re-render when the locale dictionary arrives
   return (
     <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col border-r bd-soft px-4 py-6 md:flex" aria-label="main">
       <div className="mb-8 flex items-center gap-2.5 px-2">

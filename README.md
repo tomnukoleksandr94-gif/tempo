@@ -65,7 +65,7 @@ npm run build      # продакшн-сборка в dist/
 
 ## Продакшн (актуальный адрес)
 
-**https://tempo-lifeos.pplx.app** — фронтенд + серверная часть (аккаунты, синхронизация данных, оплата Telegram Stars, админ-панель, рефералы) работает на этом адресе. Сервер `server.mjs` запускается хостингом с переменными `BOT_TOKEN`, `ADMIN_PASS`, `WEBHOOK_SECRET` (см. docs/ACCOUNTS-ADMIN.md).
+**https://tempo-lifeos-app.pplx.app** — фронтенд + серверная часть (аккаунты, синхронизация данных, оплата Telegram Stars, админ-панель, рефералы) работает на этом адресе. Сервер `server.mjs` запускается хостингом с переменными `BOT_TOKEN`, `ADMIN_PASS`, `WEBHOOK_SECRET` (см. docs/ACCOUNTS-ADMIN.md).
 
 ## Запуск сервера (self-hosting)
 
