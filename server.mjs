@@ -523,6 +523,29 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured(), tgProxy: !!TG_CRED, tgAvail: TG_TOKEN_AVAIL, tgProbeErr: TG_PROBE_ERR || null, tgProxyLayout: TG_CRED ? (TG_PROXY_HOST_SEGMENT ? 'host-segment' : 'plain') : null })
   }
 
+  // TEMPORARY diagnostics: probe credential-proxy path layouts (no secrets)
+  if (req.url === '/api/tg-debug' && req.method === 'GET') {
+    if (!TG_CRED) return json(res, 200, { error: 'no proxy configured' })
+    const layouts = [
+      ['plain', '/getMe'],
+      ['bot-prefix', '/bot/getMe'],
+      ['host-segment', '/api.telegram.org/getMe'],
+      ['host-segment-bot', '/api.telegram.org/bot/getMe']
+    ]
+    const out = []
+    for (const [name, path] of layouts) {
+      try {
+        const r = await fetch(TG_PROXY_URL + path, {
+          method: 'POST',
+          headers: { 'x-api-key': TG_PROXY_KEY, 'x-base-url': 'https://api.telegram.org' }
+        })
+        const j = await r.json().catch(() => null)
+        out.push({ name, status: r.status, ok: j?.ok === true, desc: j?.description || null, user: j?.result?.username || null })
+      } catch (e) { out.push({ name, error: e?.message }) }
+    }
+    return json(res, 200, { layouts: out })
+  }
+
   // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
   if (req.url === '/api/telegram-webhook' && req.method === 'POST') {
     if (!WEBHOOK_SECRET || req.headers['x-telegram-bot-api-secret-token'] !== WEBHOOK_SECRET) {
