@@ -63,13 +63,18 @@ async function setBotCommands() {
 const APP_URL = process.env.APP_URL || 'https://tempo-ai-life-os.pplx.app'
 const DATA_FILE = new URL('./data.json', import.meta.url).pathname
 const BACKUP_FILE = new URL('./data.backup.json', import.meta.url).pathname
+// Credential-proxy layout, resolved once by the startup probe: the pass-through
+// takes the target host in `x-base-url` and the Bot API method in the URL
+// path. Two layouts exist — with or without the host segment in the path; the
+// probe tries both and keeps whichever answers.
+let TG_PROXY_HOST_SEGMENT = false
 const TG_API = (m) => TG_CRED
-  ? `${TG_PROXY_URL}/api.telegram.org/${m}`
+  ? `${TG_PROXY_URL}${TG_PROXY_HOST_SEGMENT ? '/api.telegram.org' : ''}/${m}`
   : `https://api.telegram.org/bot${BOT_TOKEN}/${m}`
 const tgFetch = async (method, opts = {}) => {
   if (!TG_TOKEN_AVAIL) return null
   const res = await fetch(TG_API(method), TG_CRED
-    ? { ...opts, headers: { ...(opts.headers || {}), 'x-api-key': TG_PROXY_KEY } }
+    ? { ...opts, headers: { ...(opts.headers || {}), 'x-api-key': TG_PROXY_KEY, 'x-base-url': 'https://api.telegram.org' } }
     : opts)
   return res
 }
@@ -515,7 +520,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   if (req.url === '/api/health') {
-    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured(), tgProxy: !!TG_CRED, tgAvail: TG_TOKEN_AVAIL, tgProbeErr: TG_PROBE_ERR || null, tgProxyUrl: TG_CRED ? (() => { try { const u = new URL(TG_PROXY_URL); return u.host + u.pathname } catch { return 'invalid' } })() : null })
+    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured(), tgProxy: !!TG_CRED, tgAvail: TG_TOKEN_AVAIL, tgProbeErr: TG_PROBE_ERR || null, tgProxyLayout: TG_CRED ? (TG_PROXY_HOST_SEGMENT ? 'host-segment' : 'plain') : null })
   }
 
   // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
@@ -1373,14 +1378,27 @@ setBotCommands()
 ;(async () => {
   if (!TG_TOKEN_AVAIL) return
   try {
-    const r = await tgFetch('getMe', { method: 'POST' })
-    const j = await r?.json().catch(() => null)
+    let j = null
+    if (TG_CRED) {
+      // try both proxy path layouts: <URL>/getMe first, then <URL>/api.telegram.org/getMe
+      for (const hostSegment of [false, true]) {
+        TG_PROXY_HOST_SEGMENT = hostSegment
+        const r = await tgFetch('getMe', { method: 'POST' })
+        j = await r?.json().catch(() => null)
+        if (j?.ok) break
+        TG_PROBE_ERR = j?.description || ('HTTP ' + r?.status) || 'no response'
+      }
+    } else {
+      const r = await tgFetch('getMe', { method: 'POST' })
+      j = await r?.json().catch(() => null)
+      if (!j?.ok) TG_PROBE_ERR = j?.description || ('HTTP ' + r?.status) || 'no response'
+    }
     if (j?.ok) {
-      console.log('[tempo] Telegram API OK — bot @' + (j.result?.username || '?'))
+      TG_PROBE_ERR = ''
+      console.log('[tempo] Telegram API OK — bot @' + (j.result?.username || '?') + ' (proxy layout: ' + (TG_CRED ? (TG_PROXY_HOST_SEGMENT ? 'host-segment' : 'plain') : 'direct') + ')')
       await syncBotTargeting()
     } else {
       TG_TOKEN_AVAIL = false
-      TG_PROBE_ERR = j?.description || ('HTTP ' + r?.status) || 'no response'
       console.warn('[tempo] Telegram API probe failed (' + TG_PROBE_ERR + ') — Stars billing and initData login disabled. Set BOT_TOKEN env with the raw token to enable Telegram features.')
     }
   } catch (e) {
