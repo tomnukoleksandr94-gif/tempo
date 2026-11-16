@@ -34,6 +34,7 @@ const TG_CRED = TG_PROXY_URL && TG_PROXY_KEY
 // Mutable: set to false by the startup probe if the Telegram API is not
 // actually reachable (e.g. a proxy that cannot carry path-based bot auth).
 let TG_TOKEN_AVAIL = !!(BOT_TOKEN || TG_CRED)
+let TG_PROBE_ERR = ''
 const PORT = Number(process.env.PORT || 3000)
 // Shared secret for the Telegram webhook (set via setWebhook secret_token).
 // When set, every webhook request must carry it in X-Telegram-Bot-Api-Secret-Token.
@@ -514,7 +515,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   if (req.url === '/api/health') {
-    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured(), tgProxy: !!TG_CRED, tgAvail: TG_TOKEN_AVAIL })
+    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured(), tgProxy: !!TG_CRED, tgAvail: TG_TOKEN_AVAIL, tgProbeErr: TG_PROBE_ERR || null })
   }
 
   // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
@@ -1379,10 +1380,12 @@ setBotCommands()
       await syncBotTargeting()
     } else {
       TG_TOKEN_AVAIL = false
-      console.warn('[tempo] Telegram API probe failed (' + (j?.description || r?.status || 'no response') + ') — Stars billing and initData login disabled. Set BOT_TOKEN env with the raw token to enable Telegram features.')
+      TG_PROBE_ERR = j?.description || ('HTTP ' + r?.status) || 'no response'
+      console.warn('[tempo] Telegram API probe failed (' + TG_PROBE_ERR + ') — Stars billing and initData login disabled. Set BOT_TOKEN env with the raw token to enable Telegram features.')
     }
   } catch (e) {
     TG_TOKEN_AVAIL = false
+    TG_PROBE_ERR = 'fetch error: ' + e?.message
     console.warn('[tempo] Telegram API probe error:', e?.message, '— Telegram features disabled')
   }
 })()
