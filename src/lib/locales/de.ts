@@ -237,6 +237,8 @@ export const de: Dict = {
 'pr.appInstall': 'App installieren',
 'pr.appInstalled': 'Installiert',
 'pr.appIosHint': 'Auf dem iPhone: Teilen → Zum Home-Bildschirm. Funktioniert wie eine native App.',
+  'pr.installHintChrome': 'Falls das Fenster nicht erschien: Browsermenü (⋮) → „App installieren“.',
+  'pr.installHintTg': 'In Telegram: Menü (⋮) → „Zum Startbildschirm hinzufügen“.',
   'pr.export': 'Export (JSON)',
   'pr.import': 'Import',
   'pr.clearAll': 'Alle Daten löschen',

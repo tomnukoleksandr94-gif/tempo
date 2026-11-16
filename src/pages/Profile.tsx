@@ -28,6 +28,17 @@ function InstallAppSection() {
   const t2 = useT()
   const [promptEvent, setPromptEvent] = useState<any>(null)
   const [installed, setInstalled] = useState(false)
+  const [showHint, setShowHint] = useState(false)
+
+  // Platform-aware install hint: Telegram webview / iOS Safari / everything else.
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (typeof navigator !== 'undefined' &&
+      navigator.platform === 'MacIntel' &&
+      navigator.maxTouchPoints > 1)
+  const inTelegram = /Telegram/i.test(ua)
+  const hintKey = inTelegram ? 'pr.installHintTg' : isIOS ? 'pr.appIosHint' : 'pr.installHintChrome'
 
   useEffect(() => {
     try {
@@ -47,14 +58,20 @@ function InstallAppSection() {
   }, [])
 
   const install = async () => {
+    if (installed) return
     if (promptEvent) {
-      promptEvent.prompt()
-      const res = await promptEvent.userChoice?.catch?.(() => null)
-      if (res?.outcome === 'accepted') setInstalled(true)
-    } else {
+      const ev = promptEvent
+      setPromptEvent(null)
       try {
-        window.open(APP_URL, '_blank')
+        ev.prompt()
+        const res = await ev.userChoice?.catch?.(() => null)
+        if (res?.outcome === 'accepted') setInstalled(true)
       } catch { /* ignore */ }
+    } else {
+      // Native prompt unavailable (iOS Safari, Telegram webview, or the
+      // browser menu already offers install) — show manual steps instead
+      // of navigating away from the app.
+      setShowHint(true)
     }
   }
 
@@ -71,7 +88,7 @@ function InstallAppSection() {
           </div>
           <Btn variant="ghost" onClick={install}>
             <Smartphone size={15} />
-            {installed ? t2('pr.appInstalled') : promptEvent ? t2('pr.appInstall') : t2('pr.appInstall')}
+            {installed ? t2('pr.appInstalled') : t2('pr.appInstall')}
           </Btn>
         </div>
         <div className="mt-3 flex gap-2">
@@ -94,7 +111,15 @@ function InstallAppSection() {
             {t2('pr.appTg')}
           </a>
         </div>
-        <p className="mt-3 text-[11px] leading-snug text-t3">{t2('pr.appIosHint')}</p>
+        {!installed && (
+          <p
+            className={`mt-3 text-[11px] leading-snug ${
+              showHint && !promptEvent ? 'text-acc font-semibold' : 'text-t3'
+            }`}
+          >
+            {t2(hintKey)}
+          </p>
+        )}
       </div>
     </div>
   )

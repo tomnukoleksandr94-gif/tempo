@@ -248,6 +248,8 @@ export const en: Dict = {
 'pr.appInstall': 'Install app',
 'pr.appInstalled': 'Installed',
 'pr.appIosHint': 'On iPhone: Share → Add to Home Screen. Works like a native app.',
+  'pr.installHintChrome': 'If the prompt didn’t appear: browser menu (⋮) → “Install app”.',
+  'pr.installHintTg': 'In Telegram: menu (⋮) → “Add to Home Screen”.',
   'pr.export': 'Export (JSON)',
   'pr.import': 'Import',
   'pr.clearAll': 'Delete all data',

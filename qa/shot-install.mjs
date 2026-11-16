@@ -1,0 +1,20 @@
+import { chromium } from 'playwright'
+const browser = await chromium.launch()
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ru-RU' })
+const page = await ctx.newPage()
+await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+await page.waitForTimeout(1200)
+if (await page.locator('[role="dialog"]').count()) {
+  await page.locator('[role="dialog"] button:has(svg.lucide-x)').first().click().catch(() => page.keyboard.press('Escape'))
+  await page.waitForTimeout(400)
+}
+await page.getByText('Профиль', { exact: true }).last().click({ timeout: 5000 })
+await page.waitForTimeout(800)
+const btn = page.getByRole('button', { name: 'Установить приложение' }).first()
+await btn.scrollIntoViewIfNeeded()
+await btn.click()
+await page.waitForTimeout(400)
+await page.screenshot({ path: 'qa/shot-install.png' })
+const hint = await page.getByText('Если окно не появилось').isVisible()
+console.log('hint visible:', hint)
+await browser.close()

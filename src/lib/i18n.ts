@@ -250,6 +250,8 @@ const ru: Dict = {
 'pr.appInstall': 'Установить приложение',
 'pr.appInstalled': 'Установлено',
 'pr.appIosHint': 'На iPhone: Поделиться → На экран «Домой». Работает как обычное приложение.',
+  'pr.installHintChrome': 'Если окно не появилось: меню браузера (⋮) → «Установить приложение».',
+  'pr.installHintTg': 'В Telegram: меню (⋮) → «Добавить на главный экран».',
   'pr.export': 'Экспорт (JSON)',
   'pr.import': 'Импорт',
   'pr.clearAll': 'Удалить все данные',

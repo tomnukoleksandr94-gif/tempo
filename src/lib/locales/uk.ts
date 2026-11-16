@@ -237,6 +237,8 @@ export const uk: Dict = {
 'pr.appInstall': 'Встановити застосунок',
 'pr.appInstalled': 'Встановлено',
 'pr.appIosHint': 'На iPhone: Поділитися → На екран «Домашній». Працює як звичайний застосунок.',
+  'pr.installHintChrome': 'Якщо вікно не з’явилося: меню браузера (⋮) → «Встановити застосунок».',
+  'pr.installHintTg': 'У Telegram: меню (⋮) → «Додати на головний екран».',
   'pr.export': 'Експорт (JSON)',
   'pr.import': 'Імпорт',
   'pr.clearAll': 'Видалити всі дані',
