@@ -18,10 +18,28 @@
  */
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
-const API = 'https://generativelanguage.googleapis.com/v1beta/models'
+// Two ways to reach the Gemini API:
+// 1) GEMINI_API_KEY set directly → requests go straight to
+//    generativelanguage.googleapis.com with the x-goog-api-key header.
+// 2) Credential proxy (managed hosting): GEMINI_PROXY_URL + GEMINI_PROXY_KEY
+//    are injected by the platform (mapped from its credential env vars in the
+//    run command). Requests go to <GEMINI_PROXY_URL>/generativelanguage.googleapis.com/<path>
+//    with x-api-key auth; the proxy injects the real key server-side, so the
+//    key never reaches this process or its logs. (Same pattern as the
+//    Telegram proxy in server.mjs.)
+const GEMINI_PROXY_URL = (process.env.GEMINI_PROXY_URL || '').replace(/\/$/, '')
+const GEMINI_PROXY_KEY = process.env.GEMINI_PROXY_KEY || ''
+const GEMINI_CRED = !!(GEMINI_PROXY_URL && GEMINI_PROXY_KEY)
+const API = GEMINI_CRED
+  ? `${GEMINI_PROXY_URL}/generativelanguage.googleapis.com/v1beta/models`
+  : 'https://generativelanguage.googleapis.com/v1beta/models'
+/** Auth headers for every Gemini request (direct key or proxy). */
+const geminiHeaders = () => GEMINI_CRED
+  ? { 'Content-Type': 'application/json', 'x-api-key': GEMINI_PROXY_KEY }
+  : { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY }
 
 /** Whether the server has a Gemini key configured (health/UI reporting). */
-export const aiConfigured = () => !!GEMINI_KEY
+export const aiConfigured = () => !!(GEMINI_KEY || GEMINI_CRED)
 const TIMEOUT_MS = 25_000
 // Inactivity window mid-stream: a healthy model streams chunks every few
 // hundred ms; 20s of silence means it stalled — abort, deliver the partial
@@ -100,7 +118,7 @@ export class AiRouterError extends Error {
 
 /** Fail fast with a clear configuration error when the key is missing. */
 function requireKey() {
-  if (!GEMINI_KEY) {
+  if (!aiConfigured()) {
     throw new AiRouterError(
       'GEMINI_API_KEY is not configured on the server. Set it in the hosting environment (see .env.example).',
       'config'
@@ -142,7 +160,7 @@ export async function generate(opts) {
       try {
         const res = await fetch(`${API}/${model}:generateContent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+          headers: geminiHeaders(),
           body: JSON.stringify(buildBody({ ...opts, tier: tierOfModel(model, opts.tier) })),
           signal: ctrl.signal
         })
@@ -217,7 +235,7 @@ export async function generateStream(opts, onDelta) {
     try {
       const res = await fetch(`${API}/${model}:streamGenerateContent?alt=sse`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+        headers: geminiHeaders(),
         body: JSON.stringify(buildBody(opts)),
         signal: ctrl.signal
       })
