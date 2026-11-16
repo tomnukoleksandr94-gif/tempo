@@ -514,7 +514,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   if (req.url === '/api/health') {
-    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured() })
+    return json(res, 200, { ok: true, billing: !!TG_TOKEN_AVAIL, ai: aiConfigured(), tgProxy: !!TG_CRED, tgAvail: TG_TOKEN_AVAIL })
   }
 
   // --- Telegram webhook (authenticated by a shared secret set on setWebhook) ---
