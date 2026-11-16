@@ -57,7 +57,7 @@ async function setBotCommands() {
     if (res.ok) console.log('[tempo] bot commands registered')
   } catch (e) { console.warn('[tempo] setMyCommands failed:', e?.message) }
 }
-const APP_URL = process.env.APP_URL || 'https://tempo-lifeos-app.pplx.app'
+const APP_URL = process.env.APP_URL || 'https://tempo-ai-life-os.pplx.app'
 const DATA_FILE = new URL('./data.json', import.meta.url).pathname
 const BACKUP_FILE = new URL('./data.backup.json', import.meta.url).pathname
 const TG_API = (m) => TG_CRED

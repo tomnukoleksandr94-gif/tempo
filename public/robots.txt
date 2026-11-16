@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /port/
-Sitemap: https://tempo-lifeos-app.pplx.app/sitemap.xml
+Sitemap: https://tempo-ai-life-os.pplx.app/sitemap.xml

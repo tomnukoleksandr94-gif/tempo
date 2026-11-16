@@ -20,7 +20,7 @@ import { Smartphone, Globe, Send } from 'lucide-react'
 
 const CURRENCIES: Currency[] = ['EUR', 'USD', 'GBP', 'UAH', 'PLN', 'RUB']
 
-const APP_URL = 'https://tempo-lifeos-app.pplx.app'
+const APP_URL = 'https://tempo-ai-life-os.pplx.app'
 const BOT_URL = 'https://t.me/Tempo00Bot'
 
 /** "App" section: install as PWA / open web / open in Telegram. */

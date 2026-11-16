@@ -95,7 +95,7 @@ export function LegalSection() {
           {doc.map((p, i) => (
             <p key={i}>{p}</p>
           ))}
-          <p className="text-[11px] text-t3">Tempo — tempo-lifeos-app.pplx.app · 2026</p>
+          <p className="text-[11px] text-t3">Tempo — tempo-ai-life-os.pplx.app · 2026</p>
         </div>
       </Sheet>
     </>
