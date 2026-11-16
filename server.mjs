@@ -30,7 +30,10 @@ import { generate, generateStream, systemPrompt, extractJson, MODEL_REGISTRY, TI
 const BOT_TOKEN = process.env.BOT_TOKEN || ''
 const TG_PROXY_URL = (process.env.CUSTOM_CRED_API_TELEGRAM_ORG_URL || '').replace(/\/$/, '')
 const TG_PROXY_KEY = process.env.CUSTOM_CRED_API_TELEGRAM_ORG_PROXY_AUTH_KEY || ''
-const TG_CRED = TG_PROXY_URL && TG_PROXY_KEY
+// A raw BOT_TOKEN always wins: the credential proxy cannot carry Telegram's
+// path-based auth (/bot<token>/method), so when the raw token is present we
+// call api.telegram.org directly.
+const TG_CRED = TG_PROXY_URL && TG_PROXY_KEY && !BOT_TOKEN
 // Mutable: set to false by the startup probe if the Telegram API is not
 // actually reachable (e.g. a proxy that cannot carry path-based bot auth).
 let TG_TOKEN_AVAIL = !!(BOT_TOKEN || TG_CRED)
