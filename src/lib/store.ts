@@ -44,6 +44,7 @@ const initialSettings: Settings = {
   theme: 'dark',
   effects: true,
   eventReminders: true,
+  installBanner: true,
   onboarded: false
 }
 

@@ -14,6 +14,7 @@ import { useT } from '../lib/hooks'
 
 import { t } from '../lib/i18n'
 import { download } from '../lib/utils'
+import { usePwaInstall, installHintKey } from '../lib/pwa'
 import type { Currency } from '../lib/types'
 import { LogoMark } from '../App'
 import { Smartphone, Globe, Send } from 'lucide-react'
@@ -26,47 +27,14 @@ const BOT_URL = 'https://t.me/Tempo00Bot'
 /** "App" section: install as PWA / open web / open in Telegram. */
 function InstallAppSection() {
   const t2 = useT()
-  const [promptEvent, setPromptEvent] = useState<any>(null)
-  const [installed, setInstalled] = useState(false)
+  const { promptEvent, installed, install: doInstall } = usePwaInstall()
   const [showHint, setShowHint] = useState(false)
+  const hintKey = installHintKey()
 
-  // Platform-aware install hint: Telegram webview / iOS Safari / everything else.
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (typeof navigator !== 'undefined' &&
-      navigator.platform === 'MacIntel' &&
-      navigator.maxTouchPoints > 1)
-  const inTelegram = /Telegram/i.test(ua)
-  const hintKey = inTelegram ? 'pr.installHintTg' : isIOS ? 'pr.appIosHint' : 'pr.installHintChrome'
-
-  useEffect(() => {
-    try {
-      setInstalled(window.matchMedia('(display-mode: standalone)').matches)
-    } catch { /* ignore */ }
-    const onPrompt = (e: any) => {
-      e.preventDefault()
-      setPromptEvent(e)
-    }
-    const onInstalled = () => { setInstalled(true); setPromptEvent(null) }
-    window.addEventListener('beforeinstallprompt', onPrompt)
-    window.addEventListener('appinstalled', onInstalled)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onPrompt)
-      window.removeEventListener('appinstalled', onInstalled)
-    }
-  }, [])
-
-  const install = async () => {
+  const install = () => {
     if (installed) return
     if (promptEvent) {
-      const ev = promptEvent
-      setPromptEvent(null)
-      try {
-        ev.prompt()
-        const res = await ev.userChoice?.catch?.(() => null)
-        if (res?.outcome === 'accepted') setInstalled(true)
-      } catch { /* ignore */ }
+      doInstall()
     } else {
       // Native prompt unavailable (iOS Safari, Telegram webview, or the
       // browser menu already offers install) — show manual steps instead
@@ -240,6 +208,14 @@ export default function Profile({ go }: { go?: (t: import('../App').TabId) => vo
             className={`press rounded-full px-4 py-1 text-[12px] font-semibold ${settings.eventReminders !== false ? 'bg-acc/15 text-acc' : 'bg-soft text-t2'}`}
           >
             {settings.eventReminders !== false ? t2('pr.on') : t2('pr.off')}
+          </button>
+        </Row>
+        <Row label={t2('pr.installBanner')}>
+          <button
+            onClick={() => setSettings({ installBanner: settings.installBanner === false })}
+            className={`press rounded-full px-4 py-1 text-[12px] font-semibold ${settings.installBanner !== false ? 'bg-acc/15 text-acc' : 'bg-soft text-t2'}`}
+          >
+            {settings.installBanner !== false ? t2('pr.on') : t2('pr.off')}
           </button>
         </Row>
       </Group>

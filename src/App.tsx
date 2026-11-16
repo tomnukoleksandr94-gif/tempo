@@ -18,6 +18,7 @@ const SupportPage = lazy(() => import('./pages/Support'))
 import { SuccessOverlay } from './components/SuccessOverlay'
 import { Onboarding } from './components/Onboarding'
 import { GlobalSearch } from './components/GlobalSearch'
+import InstallBanner from './components/InstallBanner'
 
 export type TabId = 'home' | 'ai' | 'finance' | 'planning' | 'billing' | 'support' | 'profile'
 
@@ -299,6 +300,7 @@ export default function App() {
       <div className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-[1080px] md:flex-row${effects ? '' : ' no-effects'}`}>
         <Sidebar tab={tab} go={go} />
         <main className="pt-island min-w-0 flex-1 px-4 pb-nav md:px-8 md:pb-10">
+          <InstallBanner />
           <div key={tab} className="page-enter">
             <Suspense fallback={<div className="flex h-[50vh] items-center justify-center"><LogoMark size={30} /></div>}>
               {tab === 'home' && <HomePage go={go} />}

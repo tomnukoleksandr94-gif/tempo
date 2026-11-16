@@ -109,6 +109,8 @@ export interface Settings {
   theme: 'auto' | 'dark' | 'light'
   effects: boolean
   eventReminders?: boolean
+  /** show the "install the app" banner on the web (default true) */
+  installBanner?: boolean
   /** first-run onboarding completed */
   onboarded?: boolean
 }
